@@ -4,6 +4,33 @@ All notable changes to the `skill-review` skill are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 versioning follows [SemVer](https://semver.org/).
 
+## [1.5.0] — 2026-09-08
+
+### Added
+- `references/severity_config.yaml` (new file): externalizes every check's
+  severity (Blocker/Warning/Info) into an editable `check_id -> {what_is_wrong,
+  severity}` table. Editing a `severity` value there changes what any future
+  validation run reports — for every skill — with no code changes.
+- `README.md` (root) and `skill-review/README.md`: substantially expanded —
+  purpose, the full current validation checklist organized by category
+  (Metadata / Structure / Permissions & Tool Usage / Security), concrete
+  usage examples for both scripts, and how to retune severity via the new
+  config file. Root README now has a short pointer section describing
+  `skill-review` instead of only a generic repo-layout blurb.
+
+### Changed
+- `scripts/structural_check.py`: `add_finding()` now takes a `check_id`
+  instead of a literal severity string, and resolves severity via a new
+  `load_severity_config()` that reads `references/severity_config.yaml`
+  (path resolved relative to the script file, so this keeps working
+  regardless of caller cwd and stays self-contained when the skill is
+  packaged/distributed standalone). `run_checks()` loads and validates the
+  config before running any check, returning `fatal_error` immediately on a
+  missing file, YAML parse error, or an invalid/missing severity value —
+  fails fast and clearly rather than defaulting silently or crashing with a
+  raw traceback. `scripts/generate_static_report.py` required no changes —
+  it already just renders whatever severity ends up on each finding.
+
 ## [1.4.0] — 2026-09-08
 
 ### Added
