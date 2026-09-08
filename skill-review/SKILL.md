@@ -2,7 +2,7 @@
 name: skill-review
 description: Statically reviews a Claude Agent Skill's SKILL.md and bundled resources against best-practice conventions — frontmatter compliance, progressive disclosure and file structure, description/triggering strength, writing style (explained reasoning vs. rigid MUST/NEVER directives), overfitting, and safety. Produces both a machine-readable JSON scorecard and a human-readable markdown report, with a concrete suggested rewrite for every flagged issue. Use this whenever the user asks to review, audit, lint, validate, critique, grade, or get feedback on a skill or a SKILL.md file — before publishing a new skill, as a pre-check in a skill-evaluation pipeline, or when comparing two skill versions. Trigger even on casual phrasing like "check this skill", "is this SKILL.md any good", or "what's wrong with my skill" without the user saying "validate" explicitly.
 metadata:
-  version: "1.3.0"
+  version: "1.4.0"
   maintained_by: "Claude Code Skill Evaluation project"
 ---
 
@@ -73,6 +73,26 @@ the environment issue and rerun before continuing.
 Any `compliance_errors` are automatic **Blocker** findings — the skill will
 fail to parse or upload. List these first in the report regardless of what
 else you find.
+
+Every check the script runs also lands in `result["findings"]` — the same
+facts as `compliance_errors`/`structural_warnings`, but structured as
+`{category, severity, issue, suggestion, location}` with a fixed
+Blocker/Warning/Info severity per check (not the rubric's Minor/Major/
+Blocker/Pass scale below — these are two different scales; don't conflate
+them). If the user wants a **quick, purely mechanical** rendering of just
+this deterministic layer — no qualitative confirmation, no rewrites — run:
+
+```bash
+python3 scripts/generate_static_report.py <path-to-skill-directory>
+```
+
+This prints a Markdown report with one table per category (Metadata,
+Structure, Permissions & Tool Usage, Security): what's wrong, its severity,
+and a suggested fix, one row per occurrence. Use `--out <path>` to write it
+to a file instead of stdout. This is **not** a substitute for Steps 3-5
+below — it skips the candidate-confirmation and rewrite work entirely, so
+only reach for it when the user explicitly wants the fast static-only view
+rather than the full review.
 
 ## Step 3: Read the skill yourself
 
