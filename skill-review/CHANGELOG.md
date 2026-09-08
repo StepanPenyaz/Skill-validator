@@ -4,6 +4,40 @@ All notable changes to the `skill-review` skill are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 versioning follows [SemVer](https://semver.org/).
 
+## [1.4.0] — 2026-09-08
+
+### Added
+- `scripts/structural_check.py`: every check now also records a structured
+  finding — `{category, severity, issue, suggestion, location}` — in a new
+  `result["findings"]` array, in addition to the existing
+  `compliance_errors`/`structural_warnings`/`metrics` (now derived from
+  `findings` rather than hand-appended, for a single source of truth).
+  `category` is one of Metadata / Structure / Permissions & Tool Usage /
+  Security. `severity` is a fixed, per-check-type Blocker/Warning/Info scale
+  — **distinct from** the qualitative rubric's Minor/Major/Blocker/Pass
+  scale used in the final `<skill-name>-review.json`/`.md`; the two are not
+  interchangeable. Internals also refactored: `main()`'s check logic moved
+  into a new `run_checks(skill_path)` function that other scripts can import
+  and call directly (returns `{"fatal_error": ...}` instead of exiting).
+- `scripts/generate_static_report.py` (new file): renders `findings` as a
+  human-readable Markdown report — one table per category, each row showing
+  what's wrong, its severity, and a suggested fix (one row per occurrence,
+  not aggregated). `python scripts/generate_static_report.py <skill_dir>
+  [--out <path>]`. This is still the deterministic Linter stage — no
+  qualitative judgment is applied, and it's explicitly not a substitute for
+  the full `<skill-name>-review.md` produced by the qualitative Static
+  Quality pass (SKILL.md Steps 3-5).
+- `SKILL.md` Step 2: points at the new script as an optional fast, static-
+  only view when that's what the user actually wants.
+
+### Fixed
+- `scripts/generate_static_report.py`: explicitly reconfigures stdout/stderr
+  to UTF-8. Without this, printing the report on Windows used the console's
+  default codepage (commonly cp1252), which can't represent characters like
+  em dashes or the "…redacted…" marker used for hardcoded-secret findings —
+  found by round-tripping the report through `--out` and comparing to
+  stdout.
+
 ## [1.3.0] — 2026-09-08
 
 ### Fixed

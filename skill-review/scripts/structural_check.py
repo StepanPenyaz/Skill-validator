@@ -7,6 +7,17 @@ references/rubric.md) — it only computes objective facts and hard-compliance
 errors so the qualitative review has real numbers to reason about instead of
 re-deriving them by eye.
 
+Every check also records a structured "finding" (category, a fixed
+Blocker/Warning/Info severity, an issue description, a suggested fix, and a
+location when applicable) in result["findings"], in addition to the
+long-standing flat compliance_errors/structural_warnings lists (still
+derived from the same findings, for backward compatibility) and metrics.
+scripts/generate_static_report.py renders result["findings"] as a
+human-readable, per-category Markdown report. This Blocker/Warning/Info
+scale is specific to this deterministic layer — it is distinct from the
+qualitative rubric's Minor/Major/Blocker/Pass scale used in the final
+<skill-name>-review.json/.md (see references/rubric.md and references/schema.md).
+
 Usage:
     python structural_check.py <skill_directory>
 
@@ -40,7 +51,7 @@ PORTABILITY_PATTERNS = [
 
 # Recommended (not required) SKILL.md body section outline — see
 # references/preferred-structure.md. Presence/absence is only ever reported
-# as a soft signal, never a compliance_errors entry.
+# as a soft (Info) signal, never a Blocker.
 PREFERRED_SECTIONS = [
     "Purpose",
     "When to Use",
@@ -61,9 +72,9 @@ KNOWN_TOOL_NAMES = (
 )
 MCP_TOOL_PATTERN = re.compile(r"\bmcp__[A-Za-z0-9_]+\b")
 
-# Hardcoded secret/credential patterns. Matches are HARD ERRORS
-# (compliance_errors) — unlike the other pattern groups below, this one skips
-# the "candidate" treatment because the cost of shipping a real credential is
+# Hardcoded secret/credential patterns. Matches are HARD ERRORS (Blocker
+# severity) — unlike the other pattern groups below, this one skips the
+# "candidate" treatment because the cost of shipping a real credential is
 # high and these patterns are narrow enough that false positives are rare.
 # Matched values are redacted before being reported.
 SECRET_PATTERNS = [
@@ -79,9 +90,9 @@ SECRET_PATTERNS = [
     )),
 ]
 
-# Dangerous shell/command patterns — candidates, surfaced as structural_warnings
-# + metrics so the qualitative pass can confirm real risk vs. incidental match
-# (e.g. `rm -rf` against a script's own scratch directory may be legitimate).
+# Dangerous shell/command patterns — candidates (Warning severity) so the
+# qualitative pass can confirm real risk vs. incidental match (e.g. `rm -rf`
+# against a script's own scratch directory may be legitimate).
 DANGEROUS_SHELL_PATTERNS = [
     ("rm_rf", re.compile(r"\brm\s+-rf\b")),
     ("pipe_to_shell", re.compile(r"\b(curl|wget)\b[^\n|]*\|\s*(sudo\s+)?(bash|sh)\b")),
@@ -97,7 +108,7 @@ DANGEROUS_SHELL_PATTERNS = [
     ("unsigned_package_install", re.compile(r"--allow-unauthenticated|--nosignature")),
 ]
 
-# Prompt-injection / instruction-override phrasing — candidates.
+# Prompt-injection / instruction-override phrasing — candidates (Warning).
 PROMPT_INJECTION_PATTERNS = [
     ("ignore_instructions", re.compile(r"(?i)ignore (all |any )?(previous|prior|system) instructions")),
     ("override_instructions", re.compile(r"(?i)overrides? (all|any) (prior|previous|system) instructions")),
@@ -108,7 +119,7 @@ PROMPT_INJECTION_PATTERNS = [
     ("false_authority_claim", re.compile(r"(?i)trust me,? I am (the developer|anthropic|an admin)")),
 ]
 
-# Prohibited-category action phrasing — candidates.
+# Prohibited-category action phrasing — candidates (Warning).
 PROHIBITED_ACTION_PATTERNS = [
     ("enter_credentials_or_payment", re.compile(
         r"(?i)enter (your |the )?(password|credit card|ssn|social security)"
@@ -121,10 +132,29 @@ PROHIBITED_ACTION_PATTERNS = [
 # Bare-URL extraction, used for the undeclared-external-host check.
 URL_PATTERN = re.compile(r"https?://([A-Za-z0-9.-]+)(?:[:/][^\s'\"<>]*)?")
 
+# Finding categories, shared with scripts/generate_static_report.py's rendering order.
+CATEGORY_METADATA = "Metadata"
+CATEGORY_STRUCTURE = "Structure"
+CATEGORY_PERMISSIONS = "Permissions & Tool Usage"
+CATEGORY_SECURITY = "Security"
+
 
 def fail(msg):
     print(json.dumps({"fatal_error": msg}))
     sys.exit(1)
+
+
+def add_finding(findings, category, severity, issue, suggestion, location=None):
+    """severity is one of 'Blocker' | 'Warning' | 'Info', fixed per check-type
+    up front — not inferred at read time. Blocker mirrors what used to go
+    straight into compliance_errors; Warning/Info mirror structural_warnings."""
+    findings.append({
+        "category": category,
+        "severity": severity,
+        "issue": issue,
+        "suggestion": suggestion,
+        "location": location,
+    })
 
 
 def is_packaging_excluded(path, skill_path):
@@ -138,26 +168,42 @@ def is_packaging_excluded(path, skill_path):
     return any(part in PACKAGING_EXCLUDE_DIRS for part in rel_parts)
 
 
-def parse_frontmatter(content, errors):
+def parse_frontmatter(content, findings):
     if not content.startswith("---"):
-        errors.append("No YAML frontmatter found (file must start with '---').")
+        add_finding(
+            findings, CATEGORY_METADATA, "Blocker",
+            "No YAML frontmatter found (file must start with '---').",
+            "Add a frontmatter block starting and ending with '---' containing at least 'name' and 'description'.",
+        )
         return {}
     match = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
     if not match:
-        errors.append("Frontmatter delimiters found but block is malformed (missing closing '---').")
+        add_finding(
+            findings, CATEGORY_METADATA, "Blocker",
+            "Frontmatter delimiters found but block is malformed (missing closing '---').",
+            "Add the closing '---' after the frontmatter YAML.",
+        )
         return {}
     try:
         fm = yaml.safe_load(match.group(1))
     except yaml.YAMLError as e:
-        errors.append(f"Invalid YAML in frontmatter: {e}")
+        add_finding(
+            findings, CATEGORY_METADATA, "Blocker",
+            f"Invalid YAML in frontmatter: {e}",
+            "Fix the YAML syntax error (check indentation and quoting).",
+        )
         return {}
     if not isinstance(fm, dict):
-        errors.append("Frontmatter must be a YAML dictionary/mapping.")
+        add_finding(
+            findings, CATEGORY_METADATA, "Blocker",
+            "Frontmatter must be a YAML dictionary/mapping.",
+            "Rewrite the frontmatter as 'key: value' pairs, not a list or scalar.",
+        )
         return {}
     return fm
 
 
-def check_skill_md_filename_case(skill_path, errors):
+def check_skill_md_filename_case(skill_path, findings):
     """Path.exists()/read_text() are case-insensitive on Windows, so a file named
     e.g. 'Skill.md' or 'skill.md' would otherwise slip past unnoticed. Packaging
     and most non-Windows filesystems are case-sensitive, so this must be exact."""
@@ -169,53 +215,72 @@ def check_skill_md_filename_case(skill_path, errors):
         return
     wrong_case = [e for e in entries if e.lower() == "skill.md"]
     if wrong_case:
-        errors.append(
-            f"Skill file is named '{wrong_case[0]}' but must be exactly 'SKILL.md' "
-            "(case-sensitive on packaging and most non-Windows filesystems)."
+        add_finding(
+            findings, CATEGORY_METADATA, "Blocker",
+            f"Skill file is named '{wrong_case[0]}' instead of 'SKILL.md'.",
+            "Rename the file to exactly 'SKILL.md' (case-sensitive on packaging and most non-Windows filesystems).",
         )
 
 
-def check_name(name, folder_name, errors, warnings):
+def check_name(name, folder_name, findings):
     if not name:
-        errors.append("Missing 'name' in frontmatter.")
+        add_finding(findings, CATEGORY_METADATA, "Blocker",
+                    "Missing 'name' in frontmatter.", "Add a 'name' field to the frontmatter.")
         return
     if not isinstance(name, str):
-        errors.append(f"'name' must be a string, got {type(name).__name__}.")
+        add_finding(findings, CATEGORY_METADATA, "Blocker",
+                    f"'name' must be a string, got {type(name).__name__}.",
+                    "Set 'name' to a plain string value.")
         return
     name = name.strip()
     if not re.match(r"^[a-z0-9-]+$", name):
-        errors.append(f"Name '{name}' should be kebab-case (lowercase letters, digits, hyphens only).")
+        add_finding(findings, CATEGORY_METADATA, "Blocker",
+                    f"Name '{name}' is not kebab-case (lowercase letters, digits, hyphens only).",
+                    "Rename to lowercase letters, digits, and hyphens only.")
     if name.startswith("-") or name.endswith("-") or "--" in name:
-        errors.append(f"Name '{name}' cannot start/end with a hyphen or contain consecutive hyphens.")
+        add_finding(findings, CATEGORY_METADATA, "Blocker",
+                    f"Name '{name}' has a leading/trailing hyphen or consecutive hyphens.",
+                    "Remove the leading/trailing/consecutive hyphen(s).")
     if len(name) > 64:
-        errors.append(f"Name is {len(name)} characters; max is 64.")
+        add_finding(findings, CATEGORY_METADATA, "Blocker",
+                    f"Name is {len(name)} characters; max is 64.",
+                    "Shorten the name to 64 characters or fewer.")
     if folder_name and name != folder_name:
-        warnings.append(
-            f"Frontmatter name '{name}' does not match containing folder name '{folder_name}'. "
-            "These should generally match for clarity and correct packaging."
+        add_finding(
+            findings, CATEGORY_METADATA, "Warning",
+            f"Frontmatter name '{name}' does not match containing folder name '{folder_name}'.",
+            "Rename the folder (or the frontmatter 'name') so they match exactly.",
         )
 
 
-def check_description(description, errors, warnings, metrics):
+def check_description(description, findings, metrics):
     if not description:
-        errors.append("Missing 'description' in frontmatter.")
+        add_finding(findings, CATEGORY_METADATA, "Blocker",
+                    "Missing 'description' in frontmatter.", "Add a 'description' field to the frontmatter.")
         return
     if not isinstance(description, str):
-        errors.append(f"'description' must be a string, got {type(description).__name__}.")
+        add_finding(findings, CATEGORY_METADATA, "Blocker",
+                    f"'description' must be a string, got {type(description).__name__}.",
+                    "Set 'description' to a plain string value.")
         return
     description = description.strip()
     if "<" in description or ">" in description:
-        errors.append("Description cannot contain angle brackets (< or >).")
+        add_finding(findings, CATEGORY_METADATA, "Blocker",
+                    "Description contains angle brackets (< or >).",
+                    "Remove the '<'/'>' characters from the description.")
     if len(description) > 1024:
-        errors.append(f"Description is {len(description)} characters; max is 1024.")
+        add_finding(findings, CATEGORY_METADATA, "Blocker",
+                    f"Description is {len(description)} characters; max is 1024.",
+                    "Shorten the description to 1024 characters or fewer.")
     word_count = len(description.split())
     metrics["description_length_chars"] = len(description)
     metrics["description_word_count"] = word_count
     if word_count < 8:
-        warnings.append(
-            f"Description is only {word_count} words. This is the sole triggering signal Claude "
-            "sees before deciding to consult the skill — it likely doesn't cover both WHAT the "
-            "skill does and WHEN to use it."
+        add_finding(
+            findings, CATEGORY_METADATA, "Warning",
+            f"Description is only {word_count} words — the sole triggering signal Claude sees "
+            "before deciding to consult the skill.",
+            "Expand the description to state both what the skill does and when to use it.",
         )
     # Heuristic: does it read like it covers a triggering condition, not just a capability?
     trigger_cue_pattern = re.compile(
@@ -223,25 +288,27 @@ def check_description(description, errors, warnings, metrics):
     )
     metrics["description_has_trigger_cue"] = bool(trigger_cue_pattern.search(description))
     if not metrics["description_has_trigger_cue"]:
-        warnings.append(
-            "Description doesn't contain an obvious 'when to use this' cue (e.g. 'when', "
-            "'use this whenever...'). Descriptions that only state capability tend to under-trigger."
+        add_finding(
+            findings, CATEGORY_METADATA, "Warning",
+            "Description doesn't contain an obvious 'when to use this' cue (e.g. 'when', 'use this whenever...').",
+            "Add an explicit when-to-use cue, e.g. 'Use this whenever...'.",
         )
 
 
-def check_metadata_version(frontmatter, warnings):
+def check_metadata_version(frontmatter, findings):
     metadata = frontmatter.get("metadata")
     if not isinstance(metadata, dict) or not str(metadata.get("version") or "").strip():
-        warnings.append(
-            "No 'metadata.version' set. Recommended so review reports and packaging can track "
-            "skill revisions over time."
+        add_finding(
+            findings, CATEGORY_METADATA, "Info",
+            "No 'metadata.version' set.",
+            'Add metadata: { version: "1.0.0" } to the frontmatter so revisions can be tracked over time.',
         )
 
 
 def check_preferred_structure_sections(body):
     """Soft signal only — see references/preferred-structure.md. A missing
-    section is never a compliance error; many skills legitimately don't need
-    all eight (e.g. no meaningful 'When NOT to Use')."""
+    section is never a Blocker; many skills legitimately don't need all
+    eight (e.g. no meaningful 'When NOT to Use')."""
     present = []
     missing = []
     for section in PREFERRED_SECTIONS:
@@ -385,36 +452,34 @@ def find_undeclared_external_hosts(files, description):
     return sorted(h for h in hosts if h not in description)
 
 
-def main():
-    if len(sys.argv) != 2:
-        fail("Usage: python structural_check.py <skill_directory>")
-
-    skill_path = Path(sys.argv[1])
-    if not skill_path.is_dir():
-        fail(f"Not a directory: {skill_path}")
-
+def run_checks(skill_path):
+    """Runs every check against skill_path and returns the full result dict
+    (or {"fatal_error": ...} if SKILL.md is missing). Doesn't print or exit,
+    so callers other than this script's own CLI (e.g.
+    scripts/generate_static_report.py) can call it directly."""
     skill_md_path = skill_path / "SKILL.md"
     if not skill_md_path.exists():
-        fail(f"SKILL.md not found in {skill_path}")
+        return {"fatal_error": f"SKILL.md not found in {skill_path}"}
 
     content = skill_md_path.read_text(errors="ignore")
-    errors = []
-    warnings = []
+    findings = []
     metrics = {}
 
-    frontmatter = parse_frontmatter(content, errors)
+    frontmatter = parse_frontmatter(content, findings)
 
     unexpected_keys = set(frontmatter.keys()) - ALLOWED_FRONTMATTER_KEYS
     if unexpected_keys:
-        errors.append(
-            f"Unexpected frontmatter key(s): {', '.join(sorted(unexpected_keys))}. "
-            f"Allowed: {', '.join(sorted(ALLOWED_FRONTMATTER_KEYS))}."
+        add_finding(
+            findings, CATEGORY_METADATA, "Blocker",
+            f"Unexpected frontmatter key(s): {', '.join(sorted(unexpected_keys))}.",
+            f"Remove the unexpected key(s) or rename to one of the allowed keys: "
+            f"{', '.join(sorted(ALLOWED_FRONTMATTER_KEYS))}.",
         )
 
-    check_skill_md_filename_case(skill_path, errors)
-    check_name(frontmatter.get("name", ""), skill_path.name, errors, warnings)
-    check_description(frontmatter.get("description", ""), errors, warnings, metrics)
-    check_metadata_version(frontmatter, warnings)
+    check_skill_md_filename_case(skill_path, findings)
+    check_name(frontmatter.get("name", ""), skill_path.name, findings)
+    check_description(frontmatter.get("description", ""), findings, metrics)
+    check_metadata_version(frontmatter, findings)
 
     # Body = everything after the closing '---' of frontmatter
     body_match = re.match(r"^---\n.*?\n---\n(.*)$", content, re.DOTALL)
@@ -424,19 +489,22 @@ def main():
     metrics["skill_md_total_line_count"] = content.count("\n") + 1
     metrics["skill_md_body_line_count"] = body_line_count
     if body_line_count > 500:
-        warnings.append(
-            f"SKILL.md body is {body_line_count} lines (guideline: keep under ~500, ideally with an "
-            "extra layer of hierarchy — e.g. references/ files — once you approach this)."
+        add_finding(
+            findings, CATEGORY_STRUCTURE, "Warning",
+            f"SKILL.md body is {body_line_count} lines.",
+            "Move detail into references/ files and keep the body as a lean entry point "
+            "(guideline: under ~500 lines).",
         )
 
     preferred_sections = check_preferred_structure_sections(body)
     metrics["preferred_structure_sections"] = preferred_sections
     if preferred_sections["missing"]:
-        warnings.append(
-            f"{len(preferred_sections['present'])} of {len(PREFERRED_SECTIONS)} recommended SKILL.md "
-            "sections found (see references/preferred-structure.md) — missing: "
-            + ", ".join(preferred_sections["missing"])
-            + ". This is a soft recommendation, not every skill needs all of them."
+        add_finding(
+            findings, CATEGORY_STRUCTURE, "Info",
+            f"{len(preferred_sections['present'])} of {len(PREFERRED_SECTIONS)} recommended "
+            "SKILL.md sections found — missing: " + ", ".join(preferred_sections["missing"]) + ".",
+            "Optional: consider restructuring around references/preferred-structure.md's outline. "
+            "Not every skill needs all eight sections.",
         )
 
     # Multiple SKILL.md check (mirrors packaging requirement: exactly one, at <folder>/SKILL.md).
@@ -446,17 +514,14 @@ def main():
     shipped_skill_mds = [p for p in all_skill_mds if not is_packaging_excluded(p, skill_path)]
     excluded_skill_mds = [p for p in all_skill_mds if is_packaging_excluded(p, skill_path)]
     if len(shipped_skill_mds) > 1:
-        errors.append(
+        add_finding(
+            findings, CATEGORY_STRUCTURE, "Blocker",
             f"Found {len(shipped_skill_mds)} SKILL.md files that would ship in the package "
-            f"(outside {sorted(PACKAGING_EXCLUDE_DIRS)}); a packaged skill must contain exactly "
-            "one, at <folder>/SKILL.md."
+            f"(outside {sorted(PACKAGING_EXCLUDE_DIRS)}).",
+            "Keep exactly one SKILL.md at the skill root; move or remove the others "
+            "(or place them under tests/ so packaging excludes them).",
         )
-    if excluded_skill_mds:
-        metrics_note = [str(p.relative_to(skill_path)) for p in excluded_skill_mds]
-    else:
-        metrics_note = []
-
-    metrics["dev_only_skill_mds_excluded"] = metrics_note
+    metrics["dev_only_skill_mds_excluded"] = [str(p.relative_to(skill_path)) for p in excluded_skill_mds]
 
     # Resource directory presence + per-directory file counts
     dirs_present = {d: (skill_path / d).is_dir() for d in RESOURCE_DIRS}
@@ -477,26 +542,31 @@ def main():
     metrics["resource_dir_file_counts"] = resource_dir_file_counts
 
     orphaned = scan_body_for_resource_mentions(body, resource_files)
-    if orphaned:
-        warnings.append(
-            "Bundled resource file(s) are never mentioned by name in the SKILL.md body, so Claude "
-            f"has no pointer telling it when to read them: {', '.join(orphaned)}."
+    for rel_path in orphaned:
+        add_finding(
+            findings, CATEGORY_STRUCTURE, "Warning",
+            "Bundled resource file is never mentioned by name in the SKILL.md body.",
+            "Add a pointer to this file by name somewhere in the body, or remove it if unused.",
+            location=rel_path,
         )
     metrics["orphaned_resource_files"] = orphaned
 
     large_refs_missing_toc = check_large_references_for_toc(skill_path / "references")
-    if large_refs_missing_toc:
-        warnings.append(
-            "Reference file(s) over 300 lines have no visible table of contents: "
-            + ", ".join(f"{r['file']} ({r['lines']} lines)" for r in large_refs_missing_toc)
+    for r in large_refs_missing_toc:
+        add_finding(
+            findings, CATEGORY_STRUCTURE, "Warning",
+            f"Reference file is {r['lines']} lines with no visible table of contents.",
+            "Add a 'Table of Contents' heading near the top of the file.",
+            location=r["file"],
         )
     metrics["large_reference_files_missing_toc"] = large_refs_missing_toc
 
     portability_issues = find_portability_issues(content)
-    if portability_issues:
-        warnings.append(
-            "Hardcoded user-specific/absolute paths found — these will break for other users: "
-            + ", ".join(portability_issues)
+    for p in portability_issues:
+        add_finding(
+            findings, CATEGORY_STRUCTURE, "Warning",
+            f"Hardcoded user-specific/absolute path: {p}",
+            "Replace with a parameter, a relative path, or an instruction to ask the user for it.",
         )
     metrics["portability_issues"] = portability_issues
 
@@ -504,12 +574,13 @@ def main():
 
     must_never_lines = extract_must_never_lines(body)
     metrics["must_never_lines"] = must_never_lines
-    if must_never_lines:
-        warnings.append(
-            f"{len(must_never_lines)} line(s) contain a MUST/NEVER directive (see "
-            "metrics.must_never_lines for the full list with line numbers) — review each "
-            "against rubric.md's guidance on whether it protects against real harm and should "
-            "therefore also be recommended as a Claude Code hook, not left to rest on prose alone."
+    for mn in must_never_lines:
+        add_finding(
+            findings, CATEGORY_SECURITY, "Warning",
+            f"MUST/NEVER directive: \"{mn['text']}\"",
+            "Review against rubric.md's guidance: add rationale, or recommend a companion "
+            "enforcement hook if this protects against real harm.",
+            location=f"SKILL.md:{mn['line']}",
         )
 
     # --- Tool/MCP usage cross-check (candidates) ---
@@ -517,73 +588,108 @@ def main():
     metrics["declared_tools"] = declared_tools
     metrics["tools_declared_but_unreferenced"] = declared_but_unreferenced
     metrics["tools_referenced_but_undeclared"] = referenced_but_undeclared
-    if declared_but_unreferenced:
-        warnings.append(
-            "Tool(s) declared in 'allowed-tools' but never referenced in the SKILL.md body — "
-            "candidate over-provisioning, broadening attack surface without a stated need: "
-            + ", ".join(declared_but_unreferenced)
+    for tool in declared_but_unreferenced:
+        add_finding(
+            findings, CATEGORY_PERMISSIONS, "Warning",
+            f"Tool '{tool}' is declared in allowed-tools but never referenced in the SKILL.md body.",
+            "Remove the unused tool from allowed-tools, or reference it in the body if it is actually needed.",
         )
-    if referenced_but_undeclared:
-        warnings.append(
-            "Tool(s) referenced in the SKILL.md body but not listed in 'allowed-tools' — "
-            "candidate under-provisioning, may fail at runtime: "
-            + ", ".join(referenced_but_undeclared)
+    for tool in referenced_but_undeclared:
+        add_finding(
+            findings, CATEGORY_PERMISSIONS, "Warning",
+            f"Tool '{tool}' is referenced in the SKILL.md body but not listed in allowed-tools.",
+            "Add the tool to allowed-tools.",
         )
 
     # --- Security pattern scans (SKILL.md body + everything under scripts/) ---
     scannable_files = gather_scannable_files(skill_path, body)
 
     secret_hits = scan_for_secrets(scannable_files)
-    if secret_hits:
-        for hit in secret_hits:
-            errors.append(
-                f"Possible hardcoded secret/credential ({hit['category']}) at "
-                f"{hit['file']}:{hit['line']} — value redacted ({hit['redacted_match']}). "
-                "Remove hardcoded credentials before publishing."
-            )
     metrics["hardcoded_secret_candidates"] = secret_hits
+    for hit in secret_hits:
+        add_finding(
+            findings, CATEGORY_SECURITY, "Blocker",
+            f"Possible hardcoded secret/credential ({hit['category']}), value redacted "
+            f"({hit['redacted_match']}).",
+            "Remove the hardcoded credential; use a placeholder or reference an external secret store instead.",
+            location=f"{hit['file']}:{hit['line']}",
+        )
 
     dangerous_shell_hits = scan_patterns(scannable_files, DANGEROUS_SHELL_PATTERNS)
     metrics["dangerous_shell_pattern_candidates"] = dangerous_shell_hits
-    if dangerous_shell_hits:
-        warnings.append(
-            f"{len(dangerous_shell_hits)} potentially dangerous shell pattern(s) found (see "
-            "metrics.dangerous_shell_pattern_candidates) — confirm each is actually needed and "
-            "safe in context before treating it as a finding."
+    for hit in dangerous_shell_hits:
+        add_finding(
+            findings, CATEGORY_SECURITY, "Warning",
+            f"Potentially dangerous shell pattern ({hit['category']}): {hit['match']}",
+            "Review for safety in context; if legitimate, scope it narrowly (e.g. pin/verify "
+            "downloads, avoid unscoped destructive commands).",
+            location=f"{hit['file']}:{hit['line']}",
         )
 
     prompt_injection_hits = scan_patterns(scannable_files, PROMPT_INJECTION_PATTERNS)
     metrics["prompt_injection_phrase_candidates"] = prompt_injection_hits
-    if prompt_injection_hits:
-        warnings.append(
-            f"{len(prompt_injection_hits)} phrase(s) resembling prompt-injection/instruction-override "
-            "language found (see metrics.prompt_injection_phrase_candidates) — review context before "
-            "treating as a finding."
+    for hit in prompt_injection_hits:
+        add_finding(
+            findings, CATEGORY_SECURITY, "Warning",
+            f"Phrase resembling prompt-injection/instruction-override language: \"{hit['match']}\"",
+            "Review for actual instruction-override intent; remove it if it tells Claude to "
+            "disregard user or system instructions.",
+            location=f"{hit['file']}:{hit['line']}",
         )
 
     prohibited_action_hits = scan_patterns(scannable_files, PROHIBITED_ACTION_PATTERNS)
     metrics["prohibited_action_phrase_candidates"] = prohibited_action_hits
-    if prohibited_action_hits:
-        warnings.append(
-            f"{len(prohibited_action_hits)} phrase(s) resembling a prohibited high-risk action found "
-            "(see metrics.prohibited_action_phrase_candidates) — review context before treating as a finding."
+    for hit in prohibited_action_hits:
+        add_finding(
+            findings, CATEGORY_SECURITY, "Warning",
+            f"Phrase resembling a prohibited high-risk action: \"{hit['match']}\"",
+            "Review context; remove it if it directs a prohibited action (entering credentials, "
+            "permanent deletion, bypassing captchas, etc.).",
+            location=f"{hit['file']}:{hit['line']}",
         )
 
     undeclared_hosts = find_undeclared_external_hosts(scannable_files, frontmatter.get("description"))
     metrics["undeclared_external_hosts"] = undeclared_hosts
-    if undeclared_hosts:
-        warnings.append(
-            "External host(s) referenced in the body/scripts but never mentioned in the frontmatter "
-            "description (the skill's stated purpose): " + ", ".join(undeclared_hosts)
+    for host in undeclared_hosts:
+        add_finding(
+            findings, CATEGORY_SECURITY, "Warning",
+            f"External host referenced but never mentioned in the frontmatter description: {host}",
+            "Mention this host in the description, or remove/replace the call if it's unexpected.",
         )
 
-    result = {
+    # compliance_errors/structural_warnings stay for backward compatibility — derived from
+    # findings rather than hand-appended, so there's exactly one place severity is decided.
+    errors = []
+    warnings = []
+    for f in findings:
+        text = f["issue"] if not f["suggestion"] else f"{f['issue']} {f['suggestion']}"
+        if f["severity"] == "Blocker":
+            errors.append(text)
+        else:
+            warnings.append(text)
+
+    return {
         "skill_path": str(skill_path),
         "frontmatter": frontmatter,
         "compliance_errors": errors,
         "structural_warnings": warnings,
         "metrics": metrics,
+        "findings": findings,
     }
+
+
+def main():
+    if len(sys.argv) != 2:
+        fail("Usage: python structural_check.py <skill_directory>")
+
+    skill_path = Path(sys.argv[1])
+    if not skill_path.is_dir():
+        fail(f"Not a directory: {skill_path}")
+
+    result = run_checks(skill_path)
+    if "fatal_error" in result:
+        fail(result["fatal_error"])
+
     print(json.dumps(result, indent=2))
 
 
