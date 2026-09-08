@@ -4,6 +4,63 @@ All notable changes to the `skill-review` skill are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 versioning follows [SemVer](https://semver.org/).
 
+## [1.3.0] — 2026-09-08
+
+### Fixed
+- `scripts/structural_check.py`: resource-directory enumeration
+  (`resource_file_count`, `resource_dir_file_counts`,
+  `orphaned_resource_files`) and the new security pattern scans now both
+  reuse the existing `PACKAGING_EXCLUDE_DIRS` exclusion (plus `.pyc`/`.pyo`),
+  the same list `package_skill.py` strips before packaging. Previously a
+  `scripts/__pycache__/*.pyc` build artifact left over from running the
+  script locally was being counted as a bundled resource, flagged as
+  orphaned, and scanned for dangerous-pattern/secret matches — caught by
+  running the checker against this skill's own directory.
+
+### Added
+- `scripts/structural_check.py`:
+  - Metadata: `SKILL.md` filename case check (hard error if not exactly
+    `SKILL.md`); `metadata.version` presence check (warning).
+  - Structure: `metrics.resource_dir_file_counts` (per-directory file counts
+    for `scripts/`, `references/`, `assets/`, alongside the existing
+    aggregate `resource_file_count`); `metrics.preferred_structure_sections`
+    reporting coverage of the new recommended section outline (soft signal
+    only, never a compliance error).
+  - Permissions: `metrics.declared_tools`,
+    `metrics.tools_declared_but_unreferenced`, and
+    `metrics.tools_referenced_but_undeclared` — cross-checks `allowed-tools`
+    frontmatter against tool/MCP references in the SKILL.md body (candidates,
+    same treatment as `orphaned_resource_files`).
+  - Security: hardcoded secret/credential detection
+    (`metrics.hardcoded_secret_candidates`) — reported as hard
+    `compliance_errors` with the matched value redacted; dangerous shell
+    pattern detection (`metrics.dangerous_shell_pattern_candidates`);
+    prompt-injection/instruction-override phrasing detection
+    (`metrics.prompt_injection_phrase_candidates`); prohibited high-risk
+    action phrasing detection (`metrics.prohibited_action_phrase_candidates`);
+    undeclared external host detection (`metrics.undeclared_external_hosts`).
+    All security scans cover both the SKILL.md body and every file under
+    `scripts/`.
+- `references/preferred-structure.md` (new file) — a recommended 8-section
+  SKILL.md outline (Purpose, When to Use, When NOT to Use, Workflow, Rules,
+  Decision Guidelines, Validation, References), kept separate from
+  `rubric.md`/`schema.md` so it can be revised independently.
+- `references/rubric.md`: short addition under Safety directing the reviewer
+  to confirm the new candidate metrics against real context before reporting
+  them as findings — same "candidate, not verdict" treatment already used for
+  `orphaned_resource_files` and `must_never_lines`.
+- `references/schema.md`: documented the new `metrics` fields and noted that
+  `compliance_errors` can now include redacted hardcoded-secret findings.
+
+### Notes
+- Deliberately out of scope: "overly broad permissions relative to stated
+  purpose" and "silent scope creep" (body actions vs. description promises)
+  are not implemented anywhere in this skill — both require semantic
+  judgment beyond what a fast, regex-based linter can reliably do, and
+  turning them into a new qualitative rubric category wasn't taken on either.
+  `rubric.md`'s existing "Principle of Lack of Surprise" already covers
+  adjacent ground for the qualitative pass.
+
 ## [1.2.0] — 2026-09-08
 
 ### Added

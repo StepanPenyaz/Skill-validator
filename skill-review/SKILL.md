@@ -2,7 +2,7 @@
 name: skill-review
 description: Statically reviews a Claude Agent Skill's SKILL.md and bundled resources against best-practice conventions — frontmatter compliance, progressive disclosure and file structure, description/triggering strength, writing style (explained reasoning vs. rigid MUST/NEVER directives), overfitting, and safety. Produces both a machine-readable JSON scorecard and a human-readable markdown report, with a concrete suggested rewrite for every flagged issue. Use this whenever the user asks to review, audit, lint, validate, critique, grade, or get feedback on a skill or a SKILL.md file — before publishing a new skill, as a pre-check in a skill-evaluation pipeline, or when comparing two skill versions. Trigger even on casual phrasing like "check this skill", "is this SKILL.md any good", or "what's wrong with my skill" without the user saying "validate" explicitly.
 metadata:
-  version: "1.2.0"
+  version: "1.3.0"
   maintained_by: "Claude Code Skill Evaluation project"
 ---
 
@@ -56,11 +56,15 @@ python3 scripts/structural_check.py <path-to-skill-directory>
 ```
 
 This prints one JSON object: parsed frontmatter, `compliance_errors` (hard
-failures — missing/invalid frontmatter, bad naming, multiple SKILL.md
-files, disallowed keys), `structural_warnings`, and `metrics` (line counts,
-description word count, resource file inventory, orphaned-file candidates,
-large-reference-without-TOC list, hardcoded-path candidates, imperative
-marker counts).
+failures — missing/invalid frontmatter, bad naming, wrong SKILL.md filename
+case, multiple SKILL.md files, disallowed keys, hardcoded secrets/credentials),
+`structural_warnings`, and `metrics` (line counts, description word count,
+resource directory inventory and per-directory file counts, preferred-structure
+section coverage, orphaned-file candidates, large-reference-without-TOC list,
+hardcoded-path candidates, imperative marker counts, declared-vs-referenced
+tool usage, and security pattern candidates — dangerous shell commands,
+prompt-injection/instruction-override phrasing, prohibited-action phrasing,
+undeclared external hosts).
 
 If `fatal_error` is present (e.g. path doesn't exist, PyYAML missing —
 install with `pip install pyyaml --break-system-packages` if needed), fix
@@ -76,7 +80,12 @@ Open the actual `SKILL.md` body (and any `references/` files it points to)
 and score it against `references/rubric.md`, covering:
 
 1. Description & triggering quality
-2. Structure & progressive disclosure
+2. Structure & progressive disclosure — `references/preferred-structure.md`
+   has a suggested section outline (Purpose, When to Use, When NOT to Use,
+   Workflow, Rules, Decision Guidelines, Validation, References) if the
+   skill under review would benefit from restructuring; it's a
+   recommendation, not a requirement, so don't flag a skill just for using a
+   different shape.
 3. Writing style & content quality
 4. Safety
 
@@ -92,6 +101,14 @@ Also walk `metrics.must_never_lines` — every MUST/NEVER line the script
 found, with its line number and text — against rubric.md's "Hard
 directives that need enforcement, not just prose" guidance under Safety.
 Most will need no finding; flag only the ones protecting against real harm.
+
+Same treatment for the other new candidate metrics —
+`dangerous_shell_pattern_candidates`, `prompt_injection_phrase_candidates`,
+`prohibited_action_phrase_candidates`, `undeclared_external_hosts`,
+`tools_declared_but_unreferenced`, and `tools_referenced_but_undeclared` —
+confirm each against the real surrounding text before reporting it as a
+finding (see rubric.md). Any `hardcoded_secret_candidates` are already listed
+in `compliance_errors` as Blockers; no separate judgment needed there.
 
 ## Step 4: Write concrete rewrites, not just diagnoses
 

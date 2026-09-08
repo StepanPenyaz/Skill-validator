@@ -20,7 +20,17 @@ truth; the markdown is generated from it.
     "skill_md_body_line_count": 482,
     "description_word_count": 49,
     "resource_file_count": 11,
-    "imperative_marker_counts": {"MUST": 0, "NEVER": 1, "ALWAYS": 2}
+    "resource_dir_file_counts": {"scripts": 2, "references": 3, "assets": 0},
+    "imperative_marker_counts": {"MUST": 0, "NEVER": 1, "ALWAYS": 2},
+    "preferred_structure_sections": {"present": ["Purpose", "Workflow"], "missing": ["When NOT to Use"]},
+    "declared_tools": ["Bash", "Read"],
+    "tools_declared_but_unreferenced": [],
+    "tools_referenced_but_undeclared": [],
+    "hardcoded_secret_candidates": [],
+    "dangerous_shell_pattern_candidates": [],
+    "prompt_injection_phrase_candidates": [],
+    "prohibited_action_phrase_candidates": [],
+    "undeclared_external_hosts": []
   },
   "findings": [
     {
@@ -52,3 +62,10 @@ truth; the markdown is generated from it.
 - `orphaned_resource_files_confirmed`: the subset of the script's raw
   orphan-file candidates that you verified are actually unreferenced,
   after checking for indirect references (e.g. `python -m scripts.foo`).
+- `compliance_errors` can include hardcoded-secret findings
+  (`metrics.hardcoded_secret_candidates`) — these are hard blockers, always
+  reported with the matched value redacted, never in the clear.
+- The `*_candidates` metrics fields (dangerous shell patterns, prompt
+  injection phrasing, prohibited-action phrasing, undeclared external hosts,
+  tool declaration mismatches) are raw regex matches, not verdicts — confirm
+  each against real context (per `rubric.md`) before it becomes a finding.
