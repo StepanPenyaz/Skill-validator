@@ -1,0 +1,277 @@
+#!/usr/bin/env python3
+"""
+structural_check.py — deterministic, machine-checkable analysis of a Claude
+Agent Skill directory. This does NOT judge writing quality or triggering
+strength (that's a qualitative pass Claude does afterward using
+references/rubric.md) — it only computes objective facts and hard-compliance
+errors so the qualitative review has real numbers to reason about instead of
+re-deriving them by eye.
+
+Usage:
+    python structural_check.py <skill_directory>
+
+Prints a single JSON object to stdout.
+"""
+
+import json
+import re
+import sys
+from pathlib import Path
+
+try:
+    import yaml
+except ImportError:
+    print(json.dumps({"fatal_error": "PyYAML not installed. Run: pip install pyyaml --break-system-packages"}))
+    sys.exit(1)
+
+ALLOWED_FRONTMATTER_KEYS = {"name", "description", "license", "allowed-tools", "metadata", "compatibility"}
+RESOURCE_DIRS = ("scripts", "references", "assets")
+IMPERATIVE_MARKERS = ("MUST", "NEVER", "ALWAYS", "SHOULD", "REQUIRED", "DO NOT")
+# Dev-only directories that never ship in the packaged skill (must mirror the exclude
+# list in tools/package_skill.py at the solution root) — a fixture skill's own SKILL.md
+# under one of these must not count against the "exactly one SKILL.md" packaging rule.
+PACKAGING_EXCLUDE_DIRS = {"tests", ".git", "__pycache__", "dist", "node_modules", ".pytest_cache"}
+PORTABILITY_PATTERNS = [
+    r"/Users/[A-Za-z0-9_.-]+",
+    r"/home/(?!claude\b)[A-Za-z0-9_.-]+",
+    r"C:\\\\Users\\\\[A-Za-z0-9_.-]+",
+]
+
+
+def fail(msg):
+    print(json.dumps({"fatal_error": msg}))
+    sys.exit(1)
+
+
+def parse_frontmatter(content, errors):
+    if not content.startswith("---"):
+        errors.append("No YAML frontmatter found (file must start with '---').")
+        return {}
+    match = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
+    if not match:
+        errors.append("Frontmatter delimiters found but block is malformed (missing closing '---').")
+        return {}
+    try:
+        fm = yaml.safe_load(match.group(1))
+    except yaml.YAMLError as e:
+        errors.append(f"Invalid YAML in frontmatter: {e}")
+        return {}
+    if not isinstance(fm, dict):
+        errors.append("Frontmatter must be a YAML dictionary/mapping.")
+        return {}
+    return fm
+
+
+def check_name(name, folder_name, errors, warnings):
+    if not name:
+        errors.append("Missing 'name' in frontmatter.")
+        return
+    if not isinstance(name, str):
+        errors.append(f"'name' must be a string, got {type(name).__name__}.")
+        return
+    name = name.strip()
+    if not re.match(r"^[a-z0-9-]+$", name):
+        errors.append(f"Name '{name}' should be kebab-case (lowercase letters, digits, hyphens only).")
+    if name.startswith("-") or name.endswith("-") or "--" in name:
+        errors.append(f"Name '{name}' cannot start/end with a hyphen or contain consecutive hyphens.")
+    if len(name) > 64:
+        errors.append(f"Name is {len(name)} characters; max is 64.")
+    if folder_name and name != folder_name:
+        warnings.append(
+            f"Frontmatter name '{name}' does not match containing folder name '{folder_name}'. "
+            "These should generally match for clarity and correct packaging."
+        )
+
+
+def check_description(description, errors, warnings, metrics):
+    if not description:
+        errors.append("Missing 'description' in frontmatter.")
+        return
+    if not isinstance(description, str):
+        errors.append(f"'description' must be a string, got {type(description).__name__}.")
+        return
+    description = description.strip()
+    if "<" in description or ">" in description:
+        errors.append("Description cannot contain angle brackets (< or >).")
+    if len(description) > 1024:
+        errors.append(f"Description is {len(description)} characters; max is 1024.")
+    word_count = len(description.split())
+    metrics["description_length_chars"] = len(description)
+    metrics["description_word_count"] = word_count
+    if word_count < 8:
+        warnings.append(
+            f"Description is only {word_count} words. This is the sole triggering signal Claude "
+            "sees before deciding to consult the skill — it likely doesn't cover both WHAT the "
+            "skill does and WHEN to use it."
+        )
+    # Heuristic: does it read like it covers a triggering condition, not just a capability?
+    trigger_cue_pattern = re.compile(
+        r"\b(when|whenever|use (this|it) (when|for|to)|trigger|if the user|any time)\b", re.IGNORECASE
+    )
+    metrics["description_has_trigger_cue"] = bool(trigger_cue_pattern.search(description))
+    if not metrics["description_has_trigger_cue"]:
+        warnings.append(
+            "Description doesn't contain an obvious 'when to use this' cue (e.g. 'when', "
+            "'use this whenever...'). Descriptions that only state capability tend to under-trigger."
+        )
+
+
+def scan_body_for_resource_mentions(body, resource_files):
+    """Flag bundled resource files that are never referenced by name in the SKILL.md body."""
+    orphaned = []
+    for rel_path in resource_files:
+        filename = Path(rel_path).name
+        if filename not in body and rel_path not in body:
+            orphaned.append(rel_path)
+    return orphaned
+
+
+def check_large_references_for_toc(references_dir):
+    flagged = []
+    if not references_dir.is_dir():
+        return flagged
+    for f in references_dir.rglob("*"):
+        if f.is_file() and f.suffix.lower() in (".md", ".txt"):
+            try:
+                text = f.read_text(errors="ignore")
+            except Exception:
+                continue
+            line_count = text.count("\n") + 1
+            if line_count > 300:
+                has_toc = bool(re.search(r"table of contents|## contents\b", text, re.IGNORECASE))
+                if not has_toc:
+                    flagged.append({"file": str(f.relative_to(references_dir.parent)), "lines": line_count})
+    return flagged
+
+
+def find_portability_issues(text):
+    issues = []
+    for pattern in PORTABILITY_PATTERNS:
+        for m in re.finditer(pattern, text):
+            issues.append(m.group(0))
+    return sorted(set(issues))
+
+
+def count_imperative_markers(body):
+    counts = {}
+    for marker in IMPERATIVE_MARKERS:
+        counts[marker] = len(re.findall(rf"\b{re.escape(marker)}\b", body))
+    return counts
+
+
+def main():
+    if len(sys.argv) != 2:
+        fail("Usage: python structural_check.py <skill_directory>")
+
+    skill_path = Path(sys.argv[1])
+    if not skill_path.is_dir():
+        fail(f"Not a directory: {skill_path}")
+
+    skill_md_path = skill_path / "SKILL.md"
+    if not skill_md_path.exists():
+        fail(f"SKILL.md not found in {skill_path}")
+
+    content = skill_md_path.read_text(errors="ignore")
+    errors = []
+    warnings = []
+    metrics = {}
+
+    frontmatter = parse_frontmatter(content, errors)
+
+    unexpected_keys = set(frontmatter.keys()) - ALLOWED_FRONTMATTER_KEYS
+    if unexpected_keys:
+        errors.append(
+            f"Unexpected frontmatter key(s): {', '.join(sorted(unexpected_keys))}. "
+            f"Allowed: {', '.join(sorted(ALLOWED_FRONTMATTER_KEYS))}."
+        )
+
+    check_name(frontmatter.get("name", ""), skill_path.name, errors, warnings)
+    check_description(frontmatter.get("description", ""), errors, warnings, metrics)
+
+    # Body = everything after the closing '---' of frontmatter
+    body_match = re.match(r"^---\n.*?\n---\n(.*)$", content, re.DOTALL)
+    body = body_match.group(1) if body_match else content
+
+    body_line_count = body.count("\n") + 1
+    metrics["skill_md_total_line_count"] = content.count("\n") + 1
+    metrics["skill_md_body_line_count"] = body_line_count
+    if body_line_count > 500:
+        warnings.append(
+            f"SKILL.md body is {body_line_count} lines (guideline: keep under ~500, ideally with an "
+            "extra layer of hierarchy — e.g. references/ files — once you approach this)."
+        )
+
+    # Multiple SKILL.md check (mirrors packaging requirement: exactly one, at <folder>/SKILL.md).
+    # Ignore dev-only dirs (e.g. tests/fixtures/*) since package_skill.py strips them before
+    # packaging — a bundled fixture skill's SKILL.md isn't a real violation.
+    def _is_packaging_excluded(p):
+        rel_parts = p.relative_to(skill_path).parts
+        return any(part in PACKAGING_EXCLUDE_DIRS for part in rel_parts)
+
+    all_skill_mds = [p for p in skill_path.rglob("SKILL.md")]
+    shipped_skill_mds = [p for p in all_skill_mds if not _is_packaging_excluded(p)]
+    excluded_skill_mds = [p for p in all_skill_mds if _is_packaging_excluded(p)]
+    if len(shipped_skill_mds) > 1:
+        errors.append(
+            f"Found {len(shipped_skill_mds)} SKILL.md files that would ship in the package "
+            f"(outside {sorted(PACKAGING_EXCLUDE_DIRS)}); a packaged skill must contain exactly "
+            "one, at <folder>/SKILL.md."
+        )
+    if excluded_skill_mds:
+        metrics_note = [str(p.relative_to(skill_path)) for p in excluded_skill_mds]
+    else:
+        metrics_note = []
+
+    metrics["dev_only_skill_mds_excluded"] = metrics_note
+
+    # Resource directory presence
+    dirs_present = {d: (skill_path / d).is_dir() for d in RESOURCE_DIRS}
+    metrics["resource_dirs_present"] = dirs_present
+
+    resource_files = []
+    for d in RESOURCE_DIRS:
+        dpath = skill_path / d
+        if dpath.is_dir():
+            for f in dpath.rglob("*"):
+                if f.is_file():
+                    resource_files.append(str(f.relative_to(skill_path)))
+    metrics["resource_file_count"] = len(resource_files)
+
+    orphaned = scan_body_for_resource_mentions(body, resource_files)
+    if orphaned:
+        warnings.append(
+            "Bundled resource file(s) are never mentioned by name in the SKILL.md body, so Claude "
+            f"has no pointer telling it when to read them: {', '.join(orphaned)}."
+        )
+    metrics["orphaned_resource_files"] = orphaned
+
+    large_refs_missing_toc = check_large_references_for_toc(skill_path / "references")
+    if large_refs_missing_toc:
+        warnings.append(
+            "Reference file(s) over 300 lines have no visible table of contents: "
+            + ", ".join(f"{r['file']} ({r['lines']} lines)" for r in large_refs_missing_toc)
+        )
+    metrics["large_reference_files_missing_toc"] = large_refs_missing_toc
+
+    portability_issues = find_portability_issues(content)
+    if portability_issues:
+        warnings.append(
+            "Hardcoded user-specific/absolute paths found — these will break for other users: "
+            + ", ".join(portability_issues)
+        )
+    metrics["portability_issues"] = portability_issues
+
+    metrics["imperative_marker_counts"] = count_imperative_markers(body)
+
+    result = {
+        "skill_path": str(skill_path),
+        "frontmatter": frontmatter,
+        "compliance_errors": errors,
+        "structural_warnings": warnings,
+        "metrics": metrics,
+    }
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == "__main__":
+    main()
