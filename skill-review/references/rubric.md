@@ -121,3 +121,14 @@ whether the skill respects this.
   - If no (e.g. "MUST keep responses concise", a stylistic or low-stakes
     rule): no finding. Don't flag every MUST/NEVER — only ones tied to real
     harm are worth a hook recommendation.
+- **Confirm the new pattern-scan candidates before reporting them.** The
+  script also surfaces `dangerous_shell_pattern_candidates`,
+  `prompt_injection_phrase_candidates`, `prohibited_action_phrase_candidates`,
+  and `undeclared_external_hosts` — all raw regex matches, same "candidate,
+  not verdict" treatment as `orphaned_resource_files`. Check each against the
+  actual surrounding text (e.g. `rm -rf` clearing the skill's own scratch
+  directory is fine; `sudo` in an install snippet a user runs themselves may
+  be fine; a phrase that merely contains "ignore" in an unrelated sentence
+  isn't injection) before turning it into a finding. Confirmed hardcoded
+  secrets (`metrics.hardcoded_secret_candidates`) need no separate judgment
+  here — they're already hard blockers via `compliance_errors`.
