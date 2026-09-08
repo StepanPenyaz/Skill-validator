@@ -4,6 +4,24 @@ All notable changes to the `skill-review` skill are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 versioning follows [SemVer](https://semver.org/).
 
+## [1.2.0] — 2026-09-08
+
+### Added
+- `scripts/structural_check.py`: new `metrics.must_never_lines` — every
+  MUST/NEVER line in the SKILL.md body, with line number and text, instead
+  of just the aggregate counts in `metrics.imperative_marker_counts`.
+- `references/rubric.md`: new Safety guidance, "Hard directives that need
+  enforcement, not just prose" — for each `must_never_lines` entry, judge
+  whether it protects against real harm (data loss, security bypass,
+  unauthorized access, exfiltration) that a model could be talked past
+  through prose alone. If so, recommend pairing it with a project-level
+  Claude Code hook for deterministic enforcement (a skill can't configure
+  its own hooks, so the prose instruction stays — this adds a
+  recommendation, it doesn't replace anything). Stylistic/low-stakes
+  MUST/NEVERs are left alone.
+- `SKILL.md` Step 3: now directs the reviewer to walk `must_never_lines`
+  against that rubric guidance.
+
 ## [1.1.0] — 2026-09-08
 
 ### Fixed

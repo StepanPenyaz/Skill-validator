@@ -159,6 +159,23 @@ def count_imperative_markers(body):
     return counts
 
 
+def extract_must_never_lines(body):
+    """Pull out every line containing a MUST or NEVER directive, with its line number and
+    text, so the qualitative pass can review each one individually rather than working from
+    a bare count. MUST/NEVER (not the full IMPERATIVE_MARKERS set) because these are the two
+    that read as hard boundaries — see rubric.md's hook-vs-prose guidance for what to do with
+    each: a skill can't enforce its own hook, so the fix is never "remove this," but a hard
+    directive protecting against real harm resting on prose alone (which the model could be
+    talked past) is worth flagging for a companion hook recommendation."""
+    marker_pattern = re.compile(r"\b(MUST|NEVER)\b")
+    lines = []
+    for i, line in enumerate(body.split("\n"), start=1):
+        markers = sorted(set(marker_pattern.findall(line)))
+        if markers:
+            lines.append({"line": i, "markers": markers, "text": line.strip()})
+    return lines
+
+
 def main():
     if len(sys.argv) != 2:
         fail("Usage: python structural_check.py <skill_directory>")
@@ -262,6 +279,16 @@ def main():
     metrics["portability_issues"] = portability_issues
 
     metrics["imperative_marker_counts"] = count_imperative_markers(body)
+
+    must_never_lines = extract_must_never_lines(body)
+    metrics["must_never_lines"] = must_never_lines
+    if must_never_lines:
+        warnings.append(
+            f"{len(must_never_lines)} line(s) contain a MUST/NEVER directive (see "
+            "metrics.must_never_lines for the full list with line numbers) — review each "
+            "against rubric.md's guidance on whether it protects against real harm and should "
+            "therefore also be recommended as a Claude Code hook, not left to rest on prose alone."
+        )
 
     result = {
         "skill_path": str(skill_path),

@@ -2,7 +2,7 @@
 name: skill-review
 description: Statically reviews a Claude Agent Skill's SKILL.md and bundled resources against best-practice conventions — frontmatter compliance, progressive disclosure and file structure, description/triggering strength, writing style (explained reasoning vs. rigid MUST/NEVER directives), overfitting, and safety. Produces both a machine-readable JSON scorecard and a human-readable markdown report, with a concrete suggested rewrite for every flagged issue. Use this whenever the user asks to review, audit, lint, validate, critique, grade, or get feedback on a skill or a SKILL.md file — before publishing a new skill, as a pre-check in a skill-evaluation pipeline, or when comparing two skill versions. Trigger even on casual phrasing like "check this skill", "is this SKILL.md any good", or "what's wrong with my skill" without the user saying "validate" explicitly.
 metadata:
-  version: "1.1.0"
+  version: "1.2.0"
   maintained_by: "Claude Code Skill Evaluation project"
 ---
 
@@ -87,6 +87,11 @@ before treating it as a finding — false positives are worse than silence
 here, since they erode trust in the whole report. For example, a script
 referenced only via `python -m scripts.foo` is still properly pointed-to
 even though "foo.py" doesn't appear verbatim in the body.
+
+Also walk `metrics.must_never_lines` — every MUST/NEVER line the script
+found, with its line number and text — against rubric.md's "Hard
+directives that need enforcement, not just prose" guidance under Safety.
+Most will need no finding; flag only the ones protecting against real harm.
 
 ## Step 4: Write concrete rewrites, not just diagnoses
 
