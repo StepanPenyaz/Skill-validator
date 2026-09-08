@@ -103,3 +103,21 @@ whether the skill respects this.
   frames its own purpose.
 - Roleplay/persona skills are fine; skills designed to mislead the user
   about what they're actually doing are not.
+- **Hard directives that need enforcement, not just prose.** The script
+  surfaces every MUST/NEVER line in `metrics.must_never_lines` (line number
+  + text). Read each and ask: does this protect against something genuinely
+  dangerous (data loss, security bypass, unauthorized access, exfiltration)
+  that Claude could plausibly be talked past through prose alone? A skill's
+  instructions are advisory — the model reads and (usually) complies, but
+  nothing guarantees it — whereas a Claude Code hook (e.g. a `PreToolUse`
+  hook blocking the exact action) enforces deterministically regardless of
+  what the model decides.
+  - If yes: **Minor-to-Major** finding (Major if the consequence is severe).
+    The fix is *not* "remove this from SKILL.md" — a skill can't configure
+    its own hooks, and not every environment running it will have one set
+    up, so the prose stays the necessary fallback. Instead, suggest adding
+    a note recommending integrators pair it with a matching project-level
+    hook for guaranteed enforcement — defense in depth, not a swap.
+  - If no (e.g. "MUST keep responses concise", a stylistic or low-stakes
+    rule): no finding. Don't flag every MUST/NEVER — only ones tied to real
+    harm are worth a hook recommendation.
