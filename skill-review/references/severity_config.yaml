@@ -1,0 +1,66 @@
+# Severity policy for structural_check.py's static findings.
+#
+# Edit `severity` below to change what a validation run reports as
+# Blocker / Warning / Info for that check — no code changes needed, takes
+# effect on the very next run, for every skill checked. `severity` must be
+# exactly one of: Blocker, Warning, Info.
+#
+# `what_is_wrong` is a short label for humans scanning this table — it is
+# not used programmatically. The actual per-occurrence issue text reported
+# in a finding (e.g. the specific bad name, the specific file:line) is
+# still generated dynamically by structural_check.py; this file only
+# controls severity.
+#
+# Blocker  -> counted in compliance_errors; the skill will fail to parse,
+#             package, or ship safely.
+# Warning  -> counted in structural_warnings; a real signal that needs
+#             confirmation against context before being treated as a
+#             finding (see references/rubric.md).
+# Info     -> counted in structural_warnings; a soft, optional suggestion.
+
+checks:
+  frontmatter_missing:
+    what_is_wrong: "SKILL.md has no YAML frontmatter block."
+    severity: Blocker
+  frontmatter_malformed:
+    what_is_wrong: "Frontmatter delimiters found but the block is malformed."
+    severity: Blocker
+  frontmatter_invalid_yaml:
+    what_is_wrong: "Frontmatter contains invalid YAML."
+    severity: Blocker
+  frontmatter_not_mapping:
+    what_is_wrong: "Frontmatter is not a YAML dictionary/mapping."
+    severity: Blocker
+  frontmatter_unexpected_keys:
+    what_is_wrong: "Frontmatter has a key outside the allowed list."
+    severity: Blocker
+  skill_md_filename_case:
+    what_is_wrong: "Skill file's name doesn't exactly match 'SKILL.md'."
+    severity: Blocker
+  name_missing: {what_is_wrong: "Frontmatter 'name' is missing.", severity: Blocker}
+  name_wrong_type: {what_is_wrong: "Frontmatter 'name' is not a string.", severity: Blocker}
+  name_not_kebab_case: {what_is_wrong: "Frontmatter 'name' is not kebab-case.", severity: Blocker}
+  name_bad_hyphens: {what_is_wrong: "'name' has a leading/trailing/consecutive hyphen.", severity: Blocker}
+  name_too_long: {what_is_wrong: "'name' is longer than 64 characters.", severity: Blocker}
+  name_folder_mismatch: {what_is_wrong: "'name' doesn't match the containing folder.", severity: Warning}
+  description_missing: {what_is_wrong: "Frontmatter 'description' is missing.", severity: Blocker}
+  description_wrong_type: {what_is_wrong: "'description' is not a string.", severity: Blocker}
+  description_angle_brackets: {what_is_wrong: "Description contains '<' or '>'.", severity: Blocker}
+  description_too_long: {what_is_wrong: "Description is longer than 1024 characters.", severity: Blocker}
+  description_too_short: {what_is_wrong: "Description is fewer than 8 words.", severity: Warning}
+  description_no_trigger_cue: {what_is_wrong: "Description has no 'when to use' cue.", severity: Warning}
+  metadata_version_missing: {what_is_wrong: "'metadata.version' is not set.", severity: Info}
+  body_too_long: {what_is_wrong: "SKILL.md body is longer than 500 lines.", severity: Warning}
+  preferred_structure_sections_missing: {what_is_wrong: "Recommended SKILL.md section(s) missing.", severity: Info}
+  multiple_skill_md_files: {what_is_wrong: "More than one SKILL.md would ship.", severity: Blocker}
+  orphaned_resource_file: {what_is_wrong: "Bundled resource file never mentioned by name.", severity: Warning}
+  large_reference_missing_toc: {what_is_wrong: "Reference file >300 lines has no table of contents.", severity: Warning}
+  portability_path: {what_is_wrong: "Hardcoded user-specific/absolute path found.", severity: Warning}
+  tool_declared_unreferenced: {what_is_wrong: "Tool declared in allowed-tools but never used.", severity: Warning}
+  tool_referenced_undeclared: {what_is_wrong: "Tool used in the body but not declared.", severity: Warning}
+  hardcoded_secret: {what_is_wrong: "Hardcoded secret/credential pattern found.", severity: Blocker}
+  dangerous_shell_pattern: {what_is_wrong: "Potentially dangerous shell command pattern found.", severity: Warning}
+  prompt_injection_phrase: {what_is_wrong: "Phrase resembling instruction-override language.", severity: Warning}
+  prohibited_action_phrase: {what_is_wrong: "Phrase resembling a prohibited high-risk action.", severity: Warning}
+  undeclared_external_host: {what_is_wrong: "External host referenced but never named in the description.", severity: Warning}
+  must_never_line: {what_is_wrong: "Line contains a MUST/NEVER directive.", severity: Warning}

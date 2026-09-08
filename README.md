@@ -16,6 +16,24 @@ Each skill is a top-level directory containing its own `SKILL.md`. Dev-only
 content (tests, fixtures, caches) lives under that skill's `tests/`
 directory and must never ship in the packaged bundle.
 
+## skill-review
+
+The one skill currently in this repo. It statically reviews *other* Claude
+Agent Skills — `SKILL.md` plus bundled resources — against best-practice
+conventions (metadata, structure, permissions/tool usage, security) and
+produces a scored, actionable report, without ever executing the skill
+being reviewed. Run it with:
+
+```bash
+python3 skill-review/scripts/structural_check.py <path-to-a-skill>          # raw JSON
+python3 skill-review/scripts/generate_static_report.py <path-to-a-skill>    # human-readable Markdown
+```
+
+See [`skill-review/README.md`](skill-review/README.md) for the full
+picture — what each check validates, more usage examples, and how to
+retune a check's severity via `skill-review/references/severity_config.yaml`
+without touching code.
+
 ## Adding a new skill
 
 - Put it at `<repo-root>/<skill-name>/`, with `SKILL.md` at its root.

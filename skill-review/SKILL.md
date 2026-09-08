@@ -2,7 +2,7 @@
 name: skill-review
 description: Statically reviews a Claude Agent Skill's SKILL.md and bundled resources against best-practice conventions — frontmatter compliance, progressive disclosure and file structure, description/triggering strength, writing style (explained reasoning vs. rigid MUST/NEVER directives), overfitting, and safety. Produces both a machine-readable JSON scorecard and a human-readable markdown report, with a concrete suggested rewrite for every flagged issue. Use this whenever the user asks to review, audit, lint, validate, critique, grade, or get feedback on a skill or a SKILL.md file — before publishing a new skill, as a pre-check in a skill-evaluation pipeline, or when comparing two skill versions. Trigger even on casual phrasing like "check this skill", "is this SKILL.md any good", or "what's wrong with my skill" without the user saying "validate" explicitly.
 metadata:
-  version: "1.4.0"
+  version: "1.5.0"
   maintained_by: "Claude Code Skill Evaluation project"
 ---
 
@@ -76,11 +76,14 @@ else you find.
 
 Every check the script runs also lands in `result["findings"]` — the same
 facts as `compliance_errors`/`structural_warnings`, but structured as
-`{category, severity, issue, suggestion, location}` with a fixed
-Blocker/Warning/Info severity per check (not the rubric's Minor/Major/
-Blocker/Pass scale below — these are two different scales; don't conflate
-them). If the user wants a **quick, purely mechanical** rendering of just
-this deterministic layer — no qualitative confirmation, no rewrites — run:
+`{category, severity, issue, suggestion, location}` with a Blocker/Warning/
+Info severity per check (not the rubric's Minor/Major/Blocker/Pass scale
+below — these are two different scales; don't conflate them). Severity is
+looked up at run time from `references/severity_config.yaml` (a `check_id
+-> severity` table), not hardcoded — if a validation run's severities look
+off, that file (not the script) is where to look first. If the user wants a
+**quick, purely mechanical** rendering of just this deterministic layer —
+no qualitative confirmation, no rewrites — run:
 
 ```bash
 python3 scripts/generate_static_report.py <path-to-skill-directory>
