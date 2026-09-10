@@ -172,12 +172,27 @@ skill-review/
 │   └── severity_config.yaml      # Editable check_id -> severity policy (see above)
 └── tests/
     └── fixtures/
-        ├── good-skill/           # Minimal skill that should pass cleanly
+        ├── good-skill/                       # Minimal skill that should pass cleanly
         │   └── SKILL.md
-        └── bad-skill/            # Minimal skill with known issues, for regression testing
-            ├── SKILL.md
-            └── scripts/helper.py
+        ├── bad-skill/                        # Minimal skill with known issues, for regression testing
+        │   ├── SKILL.md
+        │   └── scripts/helper.py
+        └── clean-skill-with-tricky-patterns/ # Legitimate skill that resembles bad signals
+            ├── SKILL.md                      # without being one — a precision test, not a
+            ├── scripts/install.sh            # recall test (see the paragraph below)
+            └── references/lint-checklist.md
 ```
+
+`clean-skill-with-tricky-patterns` is the mirror image of `bad-skill`: `bad-
+skill` proves the checker catches real defects (recall), while this fixture
+proves it stays quiet on patterns that merely *look* like defects — a
+checksum-verified download that is never piped into a shell, an external
+host that *is* named in the description, ordinary lowercase "must"/"never"
+in prose rather than the all-caps directive style, and an `allowed-tools`
+list that matches what's actually referenced in both directions. See the
+intro paragraph of its `SKILL.md` for the full list. If any check ever
+starts flagging something in this fixture, that's a false-positive
+regression in the checker, not a problem with the fixture.
 
 `tests/` is dev-only: `structural_check.py` and `../scripts/package_skill.py`
 both exclude it, so fixture skills (each with their own `SKILL.md`) never
@@ -195,6 +210,12 @@ python3 scripts/structural_check.py tests/fixtures/good-skill
 # Should report specific known issues (see tests/fixtures/bad-skill/SKILL.md
 # comments for what each one is testing):
 python3 scripts/structural_check.py tests/fixtures/bad-skill
+
+# Should also report zero compliance errors and zero structural warnings —
+# this fixture is full of patterns that merely resemble known bad signals
+# (see its SKILL.md intro for the list). Any finding here is a false
+# positive in the checker, not a real issue in the fixture:
+python3 scripts/structural_check.py tests/fixtures/clean-skill-with-tricky-patterns
 
 # Should report zero compliance errors for skill-review itself, even though
 # the fixtures above each carry their own SKILL.md under tests/:
