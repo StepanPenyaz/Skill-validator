@@ -6,174 +6,222 @@ metadata:
   maintained_by: "Claude Code Skill Evaluation project"
 ---
 
-# Skill Review
+# Purpose
 
-A static reviewer for Claude Agent Skills. It never executes the skill being
-reviewed — it only reads the `SKILL.md` and bundled resources and judges
-them against known best practices. This makes it fast and deterministic
-where possible, and clearly separates "this skill is malformed / poorly
-written" from "this skill performs badly in practice" (that second question
-needs actual runs — see the `skill-creator` skill for that if it's
-available).
+A static reviewer for Claude Agent Skills. It reads a `SKILL.md` and its
+bundled resources and judges them against known best practices — it never
+executes the skill being reviewed. This keeps "this skill is malformed or
+poorly written" cleanly separate from "this skill performs badly in
+practice" (that second question needs actual runs; see the `skill-creator`
+skill for that if it's available).
 
-## Why two layers
+The review runs in two layers: a **deterministic pass**
+(`scripts/structural_check.py` computes hard facts and compliance errors)
+and a **qualitative pass** (you read the skill yourself against
+`references/rubric.md` and turn judgment calls into scored findings). Some
+things about a skill are objectively checkable — does the frontmatter
+parse, is the name kebab-case, is the description under 1024 characters.
+Others need judgment — is the description "pushy" enough, does the writing
+explain *why* instead of barking directives, is the skill overfit to one
+narrow example. Both layers are required for a full review; see Workflow.
 
-Some things about a skill are objectively checkable (does the frontmatter
-parse, is the name kebab-case, is the description under 1024 characters).
-Other things need judgment (is the description "pushy" enough, does the
-writing explain *why* instead of barking MUST/NEVER, is the skill overfit
-to one narrow example). This skill runs both:
+# When to Use
 
-1. **Deterministic pass** — `scripts/structural_check.py` computes hard
-   facts and compliance errors.
-2. **Qualitative pass** — you read the skill yourself against
-   `references/rubric.md` and turn judgment calls into scored findings.
+- The user asks to review, audit, lint, validate, critique, grade, or get
+  feedback on a skill or a `SKILL.md` file — including casual phrasing like
+  "check this skill", "is this SKILL.md any good", or "what's wrong with my
+  skill," without them saying "validate" explicitly.
+- As a pre-check before publishing a new skill.
+- As a gate in a skill-evaluation pipeline.
+- When comparing two versions of the same skill (see Decision Guidelines
+  for how the JSON output supports diffing).
 
-Never skip straight to writing the report from the script output alone —
-the script cannot judge writing quality, and several of its checks (e.g.
-orphaned resource files) are only *candidate* signals that need your
-confirmation against the actual text before they're reported as real
-findings.
+# When NOT to Use
 
-## Step 1: Locate what to review
+- The user wants to know whether a skill performs well in actual use
+  (triggering accuracy in practice, task success rate) rather than whether
+  it's well-formed and well-written. That's a runtime question — point to
+  the `skill-creator` skill if available, rather than trying to answer it
+  from a static read.
 
-Figure out what the user wants reviewed:
-- A path to a skill directory or `SKILL.md` file on disk → use that.
-- A skill installed in this session (visible under `/mnt/skills/...` or
-  similar) → use that path directly (read-only; don't try to edit it).
-- Pasted SKILL.md content with no file → write it to a temp directory
-  first (e.g. `/tmp/skill-under-review/SKILL.md`) so the script can run
-  against it. Ask the user for any bundled resources they want included,
-  or proceed with SKILL.md alone and note the limitation in the report.
+# Workflow
 
-If genuinely ambiguous (e.g. multiple skills exist and the user didn't say
-which), ask. Otherwise proceed — don't stall on minor ambiguity.
+1. **Locate what to review.** Figure out what the user wants reviewed:
+   - A path to a skill directory or `SKILL.md` file on disk → use that.
+   - A skill installed in this session (visible under `/mnt/skills/...` or
+     similar) → use that path directly (read-only; don't try to edit it).
+   - Pasted SKILL.md content with no file → write it to a temp directory
+     first (e.g. `/tmp/skill-under-review/SKILL.md`) so the script can run
+     against it. Ask the user for any bundled resources they want
+     included, or proceed with SKILL.md alone and note the limitation in
+     the report.
 
-## Step 2: Run the deterministic check
+2. **Run the deterministic check.**
 
-```bash
-python3 scripts/structural_check.py <path-to-skill-directory>
-```
+   ```bash
+   python3 scripts/structural_check.py <path-to-skill-directory>
+   ```
 
-This prints one JSON object: parsed frontmatter, `compliance_errors` (hard
-failures — missing/invalid frontmatter, bad naming, wrong SKILL.md filename
-case, multiple SKILL.md files, disallowed keys, hardcoded secrets/credentials),
-`structural_warnings`, and `metrics` (line counts, description word count,
-resource directory inventory and per-directory file counts, preferred-structure
-section coverage, orphaned-file candidates, large-reference-without-TOC list,
-hardcoded-path candidates, imperative marker counts, declared-vs-referenced
-tool usage, and security pattern candidates — dangerous shell commands,
-prompt-injection/instruction-override phrasing, prohibited-action phrasing,
-undeclared external hosts).
+   This prints one JSON object: parsed frontmatter, `compliance_errors`
+   (hard failures — missing/invalid frontmatter, bad naming, wrong
+   SKILL.md filename case, multiple SKILL.md files, disallowed keys,
+   hardcoded secrets/credentials), `structural_warnings`, and `metrics`
+   (line counts, description word count, resource directory inventory and
+   per-directory file counts, preferred-structure section coverage,
+   orphaned-file candidates, large-reference-without-TOC list,
+   hardcoded-path candidates, imperative marker counts, declared-vs-referenced
+   tool usage, and security pattern candidates — dangerous shell commands,
+   prompt-injection/instruction-override phrasing, prohibited-action
+   phrasing, undeclared external hosts).
 
-If `fatal_error` is present (e.g. path doesn't exist, PyYAML missing —
-install with `pip install pyyaml --break-system-packages` if needed), fix
-the environment issue and rerun before continuing.
+   If `fatal_error` is present, see Decision Guidelines.
 
-Any `compliance_errors` are automatic **Blocker** findings — the skill will
-fail to parse or upload. List these first in the report regardless of what
-else you find.
+   Every check the script runs also lands in `result["findings"]` — the
+   same facts as `compliance_errors`/`structural_warnings`, but structured
+   as `{category, severity, issue, suggestion, location}` with a
+   Blocker/Warning/Info severity per check (not the rubric's
+   Minor/Major/Blocker/Pass scale used later — these are two different
+   scales; don't conflate them). Severity is looked up at run time from
+   `references/severity_config.yaml`, not hardcoded.
 
-Every check the script runs also lands in `result["findings"]` — the same
-facts as `compliance_errors`/`structural_warnings`, but structured as
-`{category, severity, issue, suggestion, location}` with a Blocker/Warning/
-Info severity per check (not the rubric's Minor/Major/Blocker/Pass scale
-below — these are two different scales; don't conflate them). Severity is
-looked up at run time from `references/severity_config.yaml` (a `check_id
--> severity` table), not hardcoded — if a validation run's severities look
-off, that file (not the script) is where to look first. If the user wants a
-**quick, purely mechanical** rendering of just this deterministic layer —
-no qualitative confirmation, no rewrites — run:
+   If the user wants a quick, purely mechanical rendering of just this
+   deterministic layer, see Decision Guidelines for
+   `generate_static_report.py`.
 
-```bash
-python3 scripts/generate_static_report.py <path-to-skill-directory>
-```
+3. **Read the skill yourself.** Open the actual `SKILL.md` body (and any
+   `references/` files it points to) and score it against
+   `references/rubric.md`, covering:
+   1. Description & triggering quality
+   2. Structure & progressive disclosure — `references/preferred-structure.md`
+      has a suggested section outline if the skill under review would
+      benefit from restructuring; it's a recommendation, not a
+      requirement, so don't flag a skill just for using a different shape.
+   3. Writing style & content quality
+   4. Safety
 
-This prints a Markdown report with one table per category (Metadata,
-Structure, Permissions & Tool Usage, Security): what's wrong, its severity,
-and a suggested fix, one row per occurrence. Use `--out <path>` to write it
-to a file instead of stdout. This is **not** a substitute for Steps 3-5
-below — it skips the candidate-confirmation and rewrite work entirely, so
-only reach for it when the user explicitly wants the fast static-only view
-rather than the full review.
+   For every candidate the script flagged as a *signal* rather than a hard
+   fact (orphaned resource files, portability path matches, large-reference
+   TOC gaps, high imperative-marker counts), verify it against the real
+   text before treating it as a finding — false positives are worse than
+   silence here, since they erode trust in the whole report. For example, a
+   script referenced only via `python -m scripts.foo` is still properly
+   pointed-to even though "foo.py" doesn't appear verbatim in the body.
 
-## Step 3: Read the skill yourself
+   Also walk `metrics.must_never_lines` — every hard-directive line the
+   script found, with its line number and text — against rubric.md's
+   guidance on directives that need enforcement, not just prose. Most will
+   need no finding; flag only the ones protecting against real harm.
 
-Open the actual `SKILL.md` body (and any `references/` files it points to)
-and score it against `references/rubric.md`, covering:
+   Give the same treatment to `dangerous_shell_pattern_candidates`,
+   `prompt_injection_phrase_candidates`, `prohibited_action_phrase_candidates`,
+   `undeclared_external_hosts`, `tools_declared_but_unreferenced`, and
+   `tools_referenced_but_undeclared` — confirm each against the real
+   surrounding text before reporting it as a finding (see rubric.md). Any
+   `hardcoded_secret_candidates` are already listed in `compliance_errors`
+   as Blockers; no separate judgment needed there.
 
-1. Description & triggering quality
-2. Structure & progressive disclosure — `references/preferred-structure.md`
-   has a suggested section outline (Purpose, When to Use, When NOT to Use,
-   Workflow, Rules, Decision Guidelines, Validation, References) if the
-   skill under review would benefit from restructuring; it's a
-   recommendation, not a requirement, so don't flag a skill just for using a
-   different shape.
-3. Writing style & content quality
-4. Safety
+4. **Write concrete rewrites, not just diagnoses.** For every
+   Minor/Major/Blocker finding, include the current problematic text (or a
+   description of the structural problem) and a specific rewritten version
+   — not just "this is vague, make it more specific." If a finding is
+   purely mechanical (move a file, delete an unused key), describe the
+   exact mechanical fix instead of a prose rewrite.
 
-For every candidate the script flagged as a *signal* rather than a hard
-fact (orphaned resource files, portability path matches, large-reference
-TOC gaps, high imperative-marker counts), verify it against the real text
-before treating it as a finding — false positives are worse than silence
-here, since they erode trust in the whole report. For example, a script
-referenced only via `python -m scripts.foo` is still properly pointed-to
-even though "foo.py" doesn't appear verbatim in the body.
+5. **Produce both output files.** Follow `references/schema.md` exactly
+   for the JSON structure. Compute `overall_verdict` per Decision
+   Guidelines. Write:
+   - `<skill-name>-review.json` — full structured output per the schema.
+   - `<skill-name>-review.md` — human-readable: lead with `overall_verdict`
+     and the one-paragraph summary, then a findings table (severity |
+     category | issue | suggested fix), grouped by severity with Blockers
+     first. Keep it scannable — readable in under a minute for a skill
+     with a handful of findings.
 
-Also walk `metrics.must_never_lines` — every MUST/NEVER line the script
-found, with its line number and text — against rubric.md's "Hard
-directives that need enforcement, not just prose" guidance under Safety.
-Most will need no finding; flag only the ones protecting against real harm.
+   See Decision Guidelines for when to save files vs. summarize inline.
 
-Same treatment for the other new candidate metrics —
-`dangerous_shell_pattern_candidates`, `prompt_injection_phrase_candidates`,
-`prohibited_action_phrase_candidates`, `undeclared_external_hosts`,
-`tools_declared_but_unreferenced`, and `tools_referenced_but_undeclared` —
-confirm each against the real surrounding text before reporting it as a
-finding (see rubric.md). Any `hardcoded_secret_candidates` are already listed
-in `compliance_errors` as Blockers; no separate judgment needed there.
+# Rules
 
-## Step 4: Write concrete rewrites, not just diagnoses
+- **Never skip straight to writing the report from script output alone.**
+  The script cannot judge writing quality, and several of its checks (e.g.
+  orphaned resource files) are only *candidate* signals that need
+  confirmation against the actual text before they're reported as real
+  findings. Skipping this step produces false positives that undermine the
+  whole report.
+- **Compliance errors are automatic Blockers.** Any `compliance_errors` the
+  script returns are hard failures — the skill will fail to parse or
+  upload. List these first in the report regardless of what else is found.
+- **Confirm before reporting.** Every candidate metric (orphaned files,
+  hard-directive lines, dangerous-shell patterns, prompt-injection
+  phrasing, prohibited-action phrasing, undeclared hosts, tool-usage
+  mismatches) must be checked against the real surrounding text before it
+  becomes a finding. A raw regex match is not a verdict.
+- **Keep rewrites proportionate.** Don't rewrite parts of the skill that
+  are already fine just to demonstrate thoroughness.
+- **Stay read-only.** This skill never executes or modifies the skill
+  being reviewed — it only reads `SKILL.md` and its bundled resources.
 
-For every Minor/Major/Blocker finding, include the current problematic
-text (or a description of the structural problem) and a specific rewritten
-version — not just "this is vague, make it more specific." If a finding is
-purely mechanical (move a file, delete an unused key), describe the exact
-mechanical fix instead of prose rewrite.
+# Decision Guidelines
 
-Keep rewrites proportionate: don't rewrite parts of the skill that are
-already fine just to demonstrate thoroughness.
+- If it's genuinely ambiguous what to review (e.g. multiple skills exist
+  and the user didn't say which) → ask. Otherwise proceed — don't stall on
+  minor ambiguity.
+- If `fatal_error` is present in the script output (e.g. path doesn't
+  exist, PyYAML missing — install with
+  `pip install pyyaml --break-system-packages` if needed) → fix the
+  environment issue and rerun before continuing.
+- If the user wants a quick, purely mechanical rendering of just the
+  deterministic layer — no qualitative confirmation, no rewrites — run
+  `python3 scripts/generate_static_report.py <path-to-skill-directory>`
+  (add `--out <path>` to write to a file instead of stdout) instead of the
+  full Workflow. This is **not** a substitute for Workflow steps 3-5; only
+  reach for it when the user explicitly wants the fast static-only view.
+- If the user just wants a quick verdict in chat rather than files → it's
+  fine to summarize inline instead of writing output files. Use judgment
+  based on how the request was phrased ("give me a quick take" vs. "review
+  this skill").
+- Compute `overall_verdict` from the category scores: `blocked` if any
+  category is `blocker`, `needs_work` if any is `major`,
+  `pass_with_suggestions` if only `minor` findings remain, else `pass`.
+- If this review is being run as part of a larger Claude Code Skill
+  evaluation (comparing skill versions, gating publication, etc.), the JSON
+  output is designed to be diffed across versions: compare
+  `category_scores` and finding counts between an old and new `SKILL.md` to
+  get a quick signal on whether a revision improved structural/writing
+  quality — independent of and prior to any runtime benchmark of actual
+  task performance.
 
-## Step 5: Produce both output files
+# Validation
 
-Follow `references/schema.md` exactly for the JSON structure. Compute
-`overall_verdict` from the category scores (`blocked` if any category is
-`blocker`, `needs_work` if any is `major`, `pass_with_suggestions` if only
-`minor` findings remain, else `pass`).
+Before finishing, check:
+- Every `compliance_errors` entry is reported first, as a Blocker.
+- Every candidate-only metric was checked against the real text and either
+  confirmed as a finding or explicitly dismissed — none were reported on
+  the strength of the raw regex match alone.
+- Every Minor/Major/Blocker finding has a concrete rewrite or a described
+  mechanical fix, not just a diagnosis.
+- Rewrites are proportionate — unaffected, already-fine parts of the skill
+  weren't rewritten just to pad the report.
+- The JSON output matches `references/schema.md` exactly, and
+  `overall_verdict` is consistent with the category scores.
+- Both output files are saved to `/mnt/user-data/outputs/` and presented
+  with `present_files` when that convention exists in the current
+  environment; outside such a sandbox, both files are saved next to the
+  skill directory and the paths are given to the user directly.
 
-Write:
-- `<skill-name>-review.json` — full structured output per the schema.
-- `<skill-name>-review.md` — human-readable: lead with `overall_verdict`
-  and the one-paragraph summary, then a findings table (severity |
-  category | issue | suggested fix), grouped by severity with Blockers
-  first. Keep it scannable — this should be readable in under a minute for
-  a skill with a handful of findings.
+# References
 
-Save both to `/mnt/user-data/outputs/` and present them with `present_files`
-when that convention exists in the current environment. Outside a sandbox
-with that convention (e.g. a local Claude Code session), save both files
-next to the skill directory being reviewed and tell the user the paths
-directly.
-
-If the user just wants a quick verdict in chat rather than files, it's fine
-to summarize inline instead — use judgment based on how the request was
-phrased ("give me a quick take" vs. "review this skill").
-
-## Notes for use in an evaluation pipeline
-
-If this skill is being run as part of a larger Claude Code Skill
-evaluation (comparing skill versions, gating publication, etc.), the JSON
-output is designed to be diffed across versions: compare `category_scores`
-and finding counts between an old and new `SKILL.md` to get a quick signal
-on whether a revision improved structural/writing quality — independent of
-and prior to any runtime benchmark of actual task performance.
+- `scripts/structural_check.py` — run in Workflow step 2 to produce the
+  deterministic JSON scorecard.
+- `scripts/generate_static_report.py` — quick static-only Markdown report;
+  see Decision Guidelines for when to use this instead of the full
+  Workflow.
+- `references/rubric.md` — the qualitative scoring rubric; open it in
+  Workflow step 3 to score description/triggering, structure, writing
+  style, and safety.
+- `references/preferred-structure.md` — the optional 8-section outline
+  used when judging structure in Workflow step 3.
+- `references/schema.md` — the exact JSON output structure; follow it in
+  Workflow step 5.
+- `references/severity_config.yaml` — the `check_id -> severity` table
+  `structural_check.py` reads at run time; if a validation run's severities
+  look off, check this file (not the script) first.
