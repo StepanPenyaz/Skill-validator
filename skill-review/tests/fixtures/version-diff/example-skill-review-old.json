@@ -1,0 +1,46 @@
+{
+  "skill_name": "example-skill",
+  "reviewed_at": "2026-09-14T09:00:00Z",
+  "overall_verdict": "needs_work",
+  "category_scores": {
+    "compliance": "pass",
+    "structure_and_progressive_disclosure": "minor",
+    "description_and_triggering": "major",
+    "writing_style_and_content": "major",
+    "safety": "pass"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "category": "description_and_triggering",
+      "severity": "major",
+      "location": "frontmatter.description",
+      "issue": "Description lacks an explicit when-to-use trigger cue.",
+      "current_text": "Formats reports and cleans up data.",
+      "suggested_rewrite": "Formats and cleans up reports. Use this whenever the user asks for report formatting or data cleanup.",
+      "why_it_matters": "Without a trigger cue, Claude won't reliably reach for this skill when it applies."
+    },
+    {
+      "id": "F2",
+      "category": "writing_style_and_content",
+      "severity": "major",
+      "location": "SKILL.md:42",
+      "issue": "Body repeats the same instruction three times with no added detail each time.",
+      "current_text": "Always check the output. Always double check the output. Make sure to verify the output before finishing.",
+      "suggested_rewrite": "Check the output before finishing.",
+      "why_it_matters": "Repetition without new information bloats the body and dilutes the sections that do need emphasis."
+    },
+    {
+      "id": "F3",
+      "category": "structure_and_progressive_disclosure",
+      "severity": "minor",
+      "location": "SKILL.md:10",
+      "issue": "No 'When NOT to Use' section.",
+      "current_text": null,
+      "suggested_rewrite": "Add a short 'When NOT to Use' section.",
+      "why_it_matters": "Without it, Claude may reach for this skill in cases better served by a neighboring one."
+    }
+  ],
+  "orphaned_resource_files_confirmed": [],
+  "summary": "The old version: a clear triggering gap, a repetitive writing-style issue, and a minor structural gap."
+}

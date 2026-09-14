@@ -1,0 +1,46 @@
+{
+  "skill_name": "example-skill",
+  "reviewed_at": "2026-09-20T09:00:00Z",
+  "overall_verdict": "pass_with_suggestions",
+  "category_scores": {
+    "compliance": "pass",
+    "structure_and_progressive_disclosure": "minor",
+    "description_and_triggering": "pass",
+    "writing_style_and_content": "minor",
+    "safety": "minor"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "category": "writing_style_and_content",
+      "severity": "minor",
+      "location": "SKILL.md:42",
+      "issue": "Body still repeats the check-the-output instruction twice, though the third repetition was removed.",
+      "current_text": "Always check the output. Make sure to verify the output before finishing.",
+      "suggested_rewrite": "Check the output before finishing.",
+      "why_it_matters": "The remaining repetition is minor now, but still adds no new information."
+    },
+    {
+      "id": "F2",
+      "category": "structure_and_progressive_disclosure",
+      "severity": "minor",
+      "location": "SKILL.md:10",
+      "issue": "No 'When NOT to Use' section.",
+      "current_text": null,
+      "suggested_rewrite": "Add a short 'When NOT to Use' section.",
+      "why_it_matters": "Without it, Claude may reach for this skill in cases better served by a neighboring one."
+    },
+    {
+      "id": "F3",
+      "category": "safety",
+      "severity": "minor",
+      "location": "SKILL.md:90",
+      "issue": "A newly added helper step downloads and runs an installer without mentioning checksum verification.",
+      "current_text": "Run the installer script directly after downloading it.",
+      "suggested_rewrite": "Verify the installer's published checksum before running it.",
+      "why_it_matters": "Running an unverified downloaded script is a new risk this version introduced."
+    }
+  ],
+  "orphaned_resource_files_confirmed": [],
+  "summary": "The new version: the triggering gap is fixed, the repetition issue is reduced to minor, the structural gap persists unchanged, and a new minor safety finding was introduced by an added installer step."
+}

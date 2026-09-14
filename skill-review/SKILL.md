@@ -2,7 +2,7 @@
 name: skill-review
 description: Statically reviews a Claude Agent Skill's SKILL.md and bundled resources against best-practice conventions — frontmatter compliance, progressive disclosure and file structure, description/triggering strength, writing style (explained reasoning vs. rigid MUST/NEVER directives), overfitting, and safety. Produces both a machine-readable JSON scorecard and a human-readable markdown report, with a concrete suggested rewrite for every flagged issue. Use this whenever the user asks to review, audit, lint, validate, critique, grade, or get feedback on a skill or a SKILL.md file — before publishing a new skill, as a pre-check in a skill-evaluation pipeline, or when comparing two skill versions. Trigger even on casual phrasing like "check this skill", "is this SKILL.md any good", or "what's wrong with my skill" without the user saying "validate" explicitly.
 metadata:
-  version: "1.8.0"
+  version: "1.9.0"
   maintained_by: "Claude Code Skill Evaluation project"
 ---
 
@@ -236,12 +236,20 @@ narrow example. Both layers are required for a full review; see Workflow.
   category is `blocker`, `needs_work` if any is `major`,
   `pass_with_suggestions` if only `minor` findings remain, else `pass`.
 - If this review is being run as part of a larger Claude Code Skill
-  evaluation (comparing skill versions, gating publication, etc.), the JSON
-  output is designed to be diffed across versions: compare
-  `category_scores` and finding counts between an old and new `SKILL.md` to
-  get a quick signal on whether a revision improved structural/writing
-  quality — independent of and prior to any runtime benchmark of actual
-  task performance.
+  evaluation (comparing skill versions, gating publication, etc.), don't
+  diff two runs by hand — use `scripts/diff_reviews.py <old> <new>`
+  (`--markdown` for a human-readable table, `--fail-on-new` to exit 1 only
+  when `<new>` introduces a finding `<old>` didn't have, `--out <path>` to
+  write to a file). It auto-detects what `<old>`/`<new>` are: two skill
+  directories diffs the deterministic layer (`compliance_errors`/
+  `structural_warnings`/findings by `check_id`); two already-produced
+  `<skill-name>-review.json` files diffs the qualitative layer
+  (`overall_verdict`/`category_scores`/findings by category+location,
+  including a severity change on a finding that persists across versions).
+  Mixing one directory and one `.json` file is rejected — there's no shared
+  schema to diff them against. This gives a quick signal on whether a
+  revision improved structural/writing quality, independent of and prior
+  to any runtime benchmark of actual task performance.
 
 # Validation
 
@@ -285,3 +293,6 @@ Before finishing, check:
 - `scripts/reconcile_reviews.py` — deterministic aggregation over N
   independent qualitative review runs; used in Workflow step 6
   (self-consistency), never as a substitute for producing those runs.
+- `scripts/diff_reviews.py` — deterministic diff between two skill
+  directories or two `<skill-name>-review.json` files; see Decision
+  Guidelines for its two modes and `--fail-on-new`/`--markdown` flags.

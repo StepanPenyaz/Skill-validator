@@ -142,3 +142,64 @@ intermediate aggregate, not itself a `<skill-name>-review.json`:
   the single-run schema above, populated from this reconciled data (with
   each finding's confirmation status folded into its presentation) rather
   than from any one individual run.
+
+## Diffing across versions: the two diff shapes
+
+`scripts/diff_reviews.py <old> <new>` auto-detects, from what `<old>`/`<new>`
+point to, which of two different diff shapes to produce:
+
+**Deterministic diff** (`<old>`/`<new>` are two skill directories):
+
+```json
+{
+  "mode": "deterministic",
+  "old_path": "...", "new_path": "...",
+  "compliance_errors_delta": {"old_count": 2, "new_count": 0},
+  "structural_warnings_delta": {"old_count": 6, "new_count": 4},
+  "security_scan": {"old_skipped": false, "new_skipped": false, "changed": false},
+  "new_findings": [{"category": "Structure", "check_id": "orphaned_resource_file", "...": "..."}],
+  "resolved_findings": [{"category": "Metadata", "check_id": "metadata_version_missing", "...": "..."}],
+  "unchanged_findings_count": 3
+}
+```
+
+**Qualitative diff** (`<old>`/`<new>` are two `<skill-name>-review.json` files):
+
+```json
+{
+  "mode": "qualitative",
+  "old_path": "...", "new_path": "...",
+  "old_skill_name": "example-skill", "new_skill_name": "example-skill",
+  "overall_verdict": {"old": "needs_work", "new": "pass_with_suggestions", "changed": true},
+  "category_scores": {
+    "description_and_triggering": {"old": "major", "new": "pass", "changed": true},
+    "...": "..."
+  },
+  "new_findings": [{"category": "safety", "location": "SKILL.md:90", "...": "..."}],
+  "resolved_findings": [{"category": "description_and_triggering", "...": "..."}],
+  "severity_changed_findings": [
+    {"category": "writing_style_and_content", "location": "SKILL.md:42",
+     "old_severity": "major", "new_severity": "minor", "issue": "..."}
+  ],
+  "unchanged_findings_count": 1
+}
+```
+
+**Field notes:**
+- `new_findings`/`resolved_findings`: grouped by `check_id` + `location` in
+  deterministic mode, by `category` + `location` in qualitative mode (same
+  matching rationale as the self-consistency reconciler above) — falling
+  back to `issue` text instead of `location` when a finding has none, so
+  two distinct no-location findings under the same check/category don't
+  collide into a single diff entry.
+- `severity_changed_findings` only exists in qualitative mode. The
+  deterministic layer can't have it: a check's severity is fixed per
+  `check_id` by `severity_config.yaml`, the same for every occurrence,
+  while a qualitative finding's severity is a per-instance judgment call
+  that can genuinely change between two versions of the same underlying
+  issue (e.g. downgraded from `major` to `minor` after a partial fix).
+- Mixing one directory and one `.json` file is rejected with a
+  `fatal_error` — there's no shared schema to diff them against.
+- `--fail-on-new` exits 1 iff `new_findings` is non-empty — for a CI gate
+  that should block a PR only on regressions it actually introduced, not
+  on pre-existing findings.
