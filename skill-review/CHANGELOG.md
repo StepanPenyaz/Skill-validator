@@ -4,6 +4,20 @@ All notable changes to the `skill-review` skill are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 versioning follows [SemVer](https://semver.org/).
 
+## [1.9.1] — 2026-09-14
+
+### Changed
+- Documented "gate mode" and "full review mode" as the two officially
+  supported entry points, by name, in `SKILL.md` (Purpose, When to Use,
+  and a new Decision Guidelines bullet placed first — "decide this before
+  anything else"), `README.md` (renamed "Two layers" to "Two entry points:
+  gate mode and full review mode", with a comparison table), and the root
+  `README.md` (`## skill-review` section). No behavior, check, or output
+  schema changed — this only makes an existing, previously implicit
+  distinction explicit, so a CI pipeline or a person deciding what to run
+  doesn't have to reverse-engineer which layer they need, and so a
+  qualitative full review isn't assumed to be required for every use.
+
 ## [1.9.0] — 2026-09-14
 
 ### Added
