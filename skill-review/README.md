@@ -85,6 +85,36 @@ Hardcoded-secret and prohibited-action-phrase scanning are never skipped —
 those matter regardless of the skill's own tool access. Pass
 `--force-security-scan` to either script to run the full scan anyway.
 
+## Self-consistency (qualitative layer)
+
+The Static Quality pass is a single LLM read of the skill, which has
+run-to-run variance — the same skill reviewed twice can land on different
+severities, or catch a different borderline finding. For a routine review,
+one pass is enough. For a higher-confidence review (the user asks for one,
+or the output feeds a CI gate or a version diff where noise is costly),
+`SKILL.md` Workflow step 6 has Claude produce N independent qualitative
+passes (`<skill-name>-review-run<N>.json`, N=3 by default) and reconcile
+them with `scripts/reconcile_reviews.py`:
+
+```bash
+python3 scripts/reconcile_reviews.py <skill-name>-review-run1.json \
+  <skill-name>-review-run2.json <skill-name>-review-run3.json
+```
+
+This is purely mechanical (like the Linter — no model call): it groups
+findings across runs by `(category, location)`, reports each one's
+agreement count and a consensus severity (ties broken toward the more
+severe value), and recomputes `overall_verdict` from the reconciled
+`category_scores` using the same derivation rule as a single run. A finding
+that only 1 of 3 runs caught is kept, but marked unconfirmed rather than
+presented with the same confidence as one all three runs agreed on — see
+`tests/fixtures/consistency-runs/` for a worked example, where a single
+run's one-off `blocker`-severity finding pulls its own `overall_verdict` to
+`blocked`, while the 3-run consensus correctly settles on `needs_work`
+once that finding is recognized as unconfirmed. See
+[`references/schema.md`](references/schema.md)'s "Self-consistency" section
+for the reconciler's output shape.
+
 ## Examples of use
 
 ```bash
@@ -167,6 +197,35 @@ rubric-based scoring and concrete rewrites) isn't a script — it's Claude
 following `SKILL.md` Steps 1-5, using the Linter's output above as its
 starting facts.
 
+**5. Reconciling N independent qualitative runs** (self-consistency,
+`SKILL.md` Workflow step 6) — purely mechanical, no model call:
+
+```bash
+python3 scripts/reconcile_reviews.py \
+  tests/fixtures/consistency-runs/example-skill-review-run1.json \
+  tests/fixtures/consistency-runs/example-skill-review-run2.json \
+  tests/fixtures/consistency-runs/example-skill-review-run3.json
+```
+
+```json
+{
+  "overall_verdict": "needs_work",
+  "overall_verdict_by_run": ["blocked", "needs_work", "needs_work"],
+  "findings": [
+    {"category": "safety", "location": "SKILL.md:80", "agreement_count": 1,
+     "confirmed": false, "consensus_severity": "blocker", "...": "..."}
+  ],
+  "confirmed_findings_count": 3,
+  "unconfirmed_findings_count": 2,
+  "...": "..."
+}
+```
+
+Run 1's one-off safety finding pulled its own `overall_verdict` to
+`blocked`; the reconciled consensus correctly settles on `needs_work` once
+that finding is recognized as unconfirmed (1 of 3 runs). See
+[`references/schema.md`](references/schema.md) for the full field notes.
+
 ## Retuning severity
 
 Every check's severity (`Blocker` / `Warning` / `Info`) is looked up at run
@@ -197,7 +256,8 @@ skill-review/
 ├── .gitignore
 ├── scripts/
 │   ├── structural_check.py       # Deterministic compliance/structure/security checker
-│   └── generate_static_report.py # Renders the checker's findings as a Markdown report
+│   ├── generate_static_report.py # Renders the checker's findings as a Markdown report
+│   └── reconcile_reviews.py      # Aggregates N independent qualitative review runs
 ├── references/
 │   ├── rubric.md                 # Qualitative scoring rubric
 │   ├── schema.md                 # JSON output schema for the review report
@@ -210,10 +270,14 @@ skill-review/
         ├── bad-skill/                        # Minimal skill with known issues, for regression testing
         │   ├── SKILL.md
         │   └── scripts/helper.py
-        └── clean-skill-with-tricky-patterns/ # Legitimate skill that resembles bad signals
-            ├── SKILL.md                      # without being one — a precision test, not a
-            ├── scripts/install.sh            # recall test (see the paragraph below)
-            └── references/lint-checklist.md
+        ├── clean-skill-with-tricky-patterns/ # Legitimate skill that resembles bad signals
+        │   ├── SKILL.md                      # without being one — a precision test, not a
+        │   ├── scripts/install.sh            # recall test (see the paragraph below)
+        │   └── references/lint-checklist.md
+        └── consistency-runs/                 # 3 synthetic independent review runs of one
+            ├── example-skill-review-run1.json # hypothetical skill, for reconcile_reviews.py
+            ├── example-skill-review-run2.json # to reconcile — see "Self-consistency" above
+            └── example-skill-review-run3.json
 ```
 
 `clean-skill-with-tricky-patterns` is the mirror image of `bad-skill`: `bad-
@@ -253,13 +317,22 @@ python3 scripts/structural_check.py tests/fixtures/clean-skill-with-tricky-patte
 # Should report zero compliance errors for skill-review itself, even though
 # the fixtures above each carry their own SKILL.md under tests/:
 python3 scripts/structural_check.py .
+
+# Should confirm 3 of 5 findings (2/3 or 3/3 agreement) and leave 2
+# unconfirmed (1/3 agreement each), with overall_verdict "needs_work" even
+# though run1 alone says "blocked" — see the "Self-consistency" section above:
+python3 scripts/reconcile_reviews.py \
+  tests/fixtures/consistency-runs/example-skill-review-run1.json \
+  tests/fixtures/consistency-runs/example-skill-review-run2.json \
+  tests/fixtures/consistency-runs/example-skill-review-run3.json
 ```
 
 `structural_check.py` only prints JSON — it has no side effects and never
 modifies the skill under review. Use it (or `generate_static_report.py` for
 the human-readable version) as a quick sanity check before running the full
 qualitative review, which requires Claude to read the skill and consult
-`references/rubric.md`.
+`references/rubric.md`. `reconcile_reviews.py` is likewise a pure function
+over already-produced review JSON files — it never invokes a model itself.
 
 ## Versioning
 
