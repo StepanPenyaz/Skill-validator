@@ -4,6 +4,35 @@ All notable changes to the `skill-review` skill are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 versioning follows [SemVer](https://semver.org/).
 
+## [1.7.0] — 2026-09-14
+
+### Added
+- Self-consistency for the qualitative pass: `SKILL.md` Workflow step 6
+  (new) has Claude produce N independent qualitative review runs
+  (`<skill-name>-review-run<N>.json`, N=3 by default) instead of treating a
+  single pass as the final verdict, for reviews where noise is costly (a
+  CI gate, a version diff, or when the user explicitly wants higher
+  confidence).
+- `scripts/reconcile_reviews.py` (new file): deterministic, model-free
+  aggregation over those N run files. Groups findings across runs by
+  `(category, location)`, reports each one's agreement count and a
+  consensus severity (majority vote, ties broken toward the more severe
+  value), and recomputes `overall_verdict`/`category_scores` from the
+  reconciled data using the same derivation rule as a single run.
+  `--threshold` overrides the default simple-majority confirmation bar;
+  `--out` writes to a file instead of stdout.
+- `tests/fixtures/consistency-runs/`: three synthetic, independent review
+  runs of one hypothetical skill (`example-skill`), used as both a worked
+  example and a regression fixture for `reconcile_reviews.py`. Deliberately
+  includes a one-off `blocker`-severity finding in run 1 only — the exact
+  failure mode from the issue this feature addresses, where that single
+  run's `overall_verdict` is `blocked` but the 3-run consensus correctly
+  settles on `needs_work` once the finding is recognized as unconfirmed
+  (1 of 3 runs).
+- `references/schema.md`: new "Self-consistency: the reconciled-review
+  shape" section documenting `reconcile_reviews.py`'s output schema,
+  distinct from the single-run `<skill-name>-review.json` schema.
+
 ## [1.6.0] — 2026-09-14
 
 ### Added

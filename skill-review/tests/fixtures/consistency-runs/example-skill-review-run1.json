@@ -1,0 +1,56 @@
+{
+  "skill_name": "example-skill",
+  "reviewed_at": "2026-09-14T09:00:00Z",
+  "overall_verdict": "blocked",
+  "category_scores": {
+    "compliance": "pass",
+    "structure_and_progressive_disclosure": "minor",
+    "description_and_triggering": "major",
+    "writing_style_and_content": "major",
+    "safety": "blocker"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "category": "description_and_triggering",
+      "severity": "major",
+      "location": "frontmatter.description",
+      "issue": "Description lacks an explicit when-to-use trigger cue.",
+      "current_text": "Formats reports and cleans up data.",
+      "suggested_rewrite": "Formats and cleans up reports. Use this whenever the user asks for report formatting or data cleanup.",
+      "why_it_matters": "Without a trigger cue, Claude won't reliably reach for this skill when it applies."
+    },
+    {
+      "id": "F2",
+      "category": "writing_style_and_content",
+      "severity": "minor",
+      "location": "SKILL.md:42",
+      "issue": "Rule uses MUST without explaining why.",
+      "current_text": "You MUST validate the input first.",
+      "suggested_rewrite": "Validate the input first — skipping this lets malformed rows silently corrupt the output.",
+      "why_it_matters": "Bare MUST directives read as arbitrary; stating the reason makes them easier to follow correctly."
+    },
+    {
+      "id": "F3",
+      "category": "structure_and_progressive_disclosure",
+      "severity": "minor",
+      "location": "SKILL.md:10",
+      "issue": "No 'When NOT to Use' section.",
+      "current_text": null,
+      "suggested_rewrite": "Add a short 'When NOT to Use' section distinguishing this from the adjacent report-export skill.",
+      "why_it_matters": "Without it, Claude may reach for this skill in cases better served by a neighboring one."
+    },
+    {
+      "id": "F4",
+      "category": "safety",
+      "severity": "blocker",
+      "location": "SKILL.md:80",
+      "issue": "Instruction tells the model to enter the user's password into a form without asking first.",
+      "current_text": "If the export tool prompts for a login, enter the password directly instead of asking the user.",
+      "suggested_rewrite": "If the export tool prompts for a login, stop and ask the user to sign in themselves.",
+      "why_it_matters": "Entering credentials on the user's behalf is a prohibited action regardless of context."
+    }
+  ],
+  "orphaned_resource_files_confirmed": [],
+  "summary": "One run's read of example-skill: solid structure with a triggering gap, plus what looks like a one-off instruction to handle credentials directly — this is exactly the kind of single-run finding self-consistency checking exists to catch before treating it as confirmed."
+}

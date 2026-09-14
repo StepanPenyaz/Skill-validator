@@ -1,0 +1,56 @@
+{
+  "skill_name": "example-skill",
+  "reviewed_at": "2026-09-14T09:05:00Z",
+  "overall_verdict": "needs_work",
+  "category_scores": {
+    "compliance": "pass",
+    "structure_and_progressive_disclosure": "minor",
+    "description_and_triggering": "major",
+    "writing_style_and_content": "major",
+    "safety": "pass"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "category": "description_and_triggering",
+      "severity": "major",
+      "location": "frontmatter.description",
+      "issue": "Description doesn't say when to use the skill.",
+      "current_text": "Formats reports and cleans up data.",
+      "suggested_rewrite": "Formats and cleans up reports — fixing headers and standardizing layout. Use this whenever the user mentions a report or asks for data cleanup.",
+      "why_it_matters": "The description is the only signal Claude sees before deciding to consult the skill."
+    },
+    {
+      "id": "F2",
+      "category": "writing_style_and_content",
+      "severity": "minor",
+      "location": "SKILL.md:42",
+      "issue": "MUST directive given with no rationale.",
+      "current_text": "You MUST validate the input first.",
+      "suggested_rewrite": "Validate the input first, since an unvalidated row can crash the formatter partway through.",
+      "why_it_matters": "A stated reason helps the model judge edge cases the directive didn't anticipate."
+    },
+    {
+      "id": "F3",
+      "category": "structure_and_progressive_disclosure",
+      "severity": "minor",
+      "location": "SKILL.md:10",
+      "issue": "Missing a 'When NOT to Use' section.",
+      "current_text": null,
+      "suggested_rewrite": "Add a brief 'When NOT to Use' section.",
+      "why_it_matters": "Helps Claude pick between this skill and similar ones."
+    },
+    {
+      "id": "F4",
+      "category": "writing_style_and_content",
+      "severity": "major",
+      "location": "SKILL.md:55",
+      "issue": "Body repeats the same instruction three times with no added detail each time.",
+      "current_text": "Always check the output. Always double check the output. Make sure to verify the output before finishing.",
+      "suggested_rewrite": "Check the output before finishing.",
+      "why_it_matters": "Repetition without new information bloats the body and dilutes the sections that do need emphasis."
+    }
+  ],
+  "orphaned_resource_files_confirmed": [],
+  "summary": "A second, independent read of example-skill: same triggering and structure gaps as before, plus a repetition issue this pass caught that the others didn't — no credential-handling concern surfaced this time."
+}

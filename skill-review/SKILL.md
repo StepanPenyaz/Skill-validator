@@ -2,7 +2,7 @@
 name: skill-review
 description: Statically reviews a Claude Agent Skill's SKILL.md and bundled resources against best-practice conventions — frontmatter compliance, progressive disclosure and file structure, description/triggering strength, writing style (explained reasoning vs. rigid MUST/NEVER directives), overfitting, and safety. Produces both a machine-readable JSON scorecard and a human-readable markdown report, with a concrete suggested rewrite for every flagged issue. Use this whenever the user asks to review, audit, lint, validate, critique, grade, or get feedback on a skill or a SKILL.md file — before publishing a new skill, as a pre-check in a skill-evaluation pipeline, or when comparing two skill versions. Trigger even on casual phrasing like "check this skill", "is this SKILL.md any good", or "what's wrong with my skill" without the user saying "validate" explicitly.
 metadata:
-  version: "1.6.0"
+  version: "1.7.0"
   maintained_by: "Claude Code Skill Evaluation project"
 ---
 
@@ -150,6 +150,31 @@ narrow example. Both layers are required for a full review; see Workflow.
 
    See Decision Guidelines for when to save files vs. summarize inline.
 
+6. **Self-consistency (optional — only for a higher-confidence review).** A
+   single qualitative pass has run-to-run variance: the same skill read
+   twice can land on different severities, or catch a different borderline
+   finding. One pass (Steps 3-5) is enough for a normal review. See
+   Decision Guidelines for when to do this instead.
+   - Repeat Steps 3-4 independently N times (N=3 by default). Each pass
+     must be a genuinely fresh read — re-open `SKILL.md` and
+     `references/rubric.md` and re-derive findings from scratch; don't
+     restate or lightly edit the previous pass's findings, or the runs
+     stop being independent and the consistency check becomes meaningless.
+   - Save each pass as its own `<skill-name>-review-run<N>.json` (the same
+     per-run structure as a normal single-run review).
+   - Reconcile them, purely mechanically:
+     `python3 scripts/reconcile_reviews.py <run1.json> <run2.json> [...] [--threshold N]`.
+     It groups findings across runs by `(category, location)`, reports each
+     one's agreement count out of N and a consensus severity (ties broken
+     toward the more severe value), and recomputes `overall_verdict` from
+     the reconciled `category_scores` using the same rule as a single run.
+   - Produce `<skill-name>-review.json`/`.md` as in Step 5, but built from
+     the reconciled output: use its `category_scores`/`overall_verdict`,
+     and in the findings table mark each finding's confirmation ("3/3 runs"
+     vs. "1/3 runs — unconfirmed, review individually"). Don't silently
+     drop unconfirmed findings — a 1-of-N finding may still be real; just
+     don't present it with the same confidence as a confirmed one.
+
 # Rules
 
 - **Never skip straight to writing the report from script output alone.**
@@ -195,6 +220,18 @@ narrow example. Both layers are required for a full review; see Workflow.
   fine to summarize inline instead of writing output files. Use judgment
   based on how the request was phrased ("give me a quick take" vs. "review
   this skill").
+- Reach for Workflow step 6 (self-consistency) when the user explicitly
+  asks for a more confident or robust review ("double check this," "how
+  sure are you," "run this a few times"), or when the review's output will
+  feed something where noise is costly — a CI gate, a version diff (see the
+  next bullet), a publish/block decision — rather than by default. It costs
+  N times the qualitative pass; don't run it unprompted for a routine
+  review.
+- If `reconcile_reviews.py` reports a `fatal_error` (fewer than 2 run files
+  given, a run file missing a required field, or runs that reference
+  different `skill_name` values) → fix the input and rerun; a mismatched
+  `skill_name` usually means one of the runs was accidentally produced
+  against the wrong skill or an earlier version of it.
 - Compute `overall_verdict` from the category scores: `blocked` if any
   category is `blocker`, `needs_work` if any is `major`,
   `pass_with_suggestions` if only `minor` findings remain, else `pass`.
@@ -219,6 +256,10 @@ Before finishing, check:
   weren't rewritten just to pad the report.
 - The JSON output matches `references/schema.md` exactly, and
   `overall_verdict` is consistent with the category scores.
+- If Workflow step 6 (self-consistency) ran, the report is built from
+  `reconcile_reviews.py`'s reconciled output, not from a single run picked
+  after the fact, and each finding's confirmation status is visible rather
+  than every finding being presented at uniform confidence.
 - Both output files are saved to `/mnt/user-data/outputs/` and presented
   with `present_files` when that convention exists in the current
   environment; outside such a sandbox, both files are saved next to the
@@ -241,3 +282,6 @@ Before finishing, check:
 - `references/severity_config.yaml` — the `check_id -> severity` table
   `structural_check.py` reads at run time; if a validation run's severities
   look off, check this file (not the script) first.
+- `scripts/reconcile_reviews.py` — deterministic aggregation over N
+  independent qualitative review runs; used in Workflow step 6
+  (self-consistency), never as a substitute for producing those runs.

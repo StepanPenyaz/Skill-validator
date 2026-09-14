@@ -1,0 +1,36 @@
+{
+  "skill_name": "example-skill",
+  "reviewed_at": "2026-09-14T09:10:00Z",
+  "overall_verdict": "needs_work",
+  "category_scores": {
+    "compliance": "pass",
+    "structure_and_progressive_disclosure": "major",
+    "description_and_triggering": "major",
+    "writing_style_and_content": "minor",
+    "safety": "pass"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "category": "description_and_triggering",
+      "severity": "major",
+      "location": "frontmatter.description",
+      "issue": "No explicit trigger phrase in the description.",
+      "current_text": "Formats reports and cleans up data.",
+      "suggested_rewrite": "Formats and cleans up reports. Use this any time the user has a report that needs formatting or cleanup.",
+      "why_it_matters": "Under-triggering means the skill silently never gets used for cases it should cover."
+    },
+    {
+      "id": "F2",
+      "category": "structure_and_progressive_disclosure",
+      "severity": "major",
+      "location": "SKILL.md:10",
+      "issue": "No 'When NOT to Use' section, and the body skips straight to numbered steps with no framing.",
+      "current_text": null,
+      "suggested_rewrite": "Add a short Purpose paragraph and a 'When NOT to Use' section before the numbered steps.",
+      "why_it_matters": "Without framing, Claude has to infer scope from the steps alone, which invites overreach into adjacent tasks."
+    }
+  ],
+  "orphaned_resource_files_confirmed": [],
+  "summary": "A third, independent read of example-skill: agrees on the triggering gap, rates the missing 'When NOT to Use' section more severely than the other two passes, and didn't flag the writing-style or credential-handling issues the earlier runs raised."
+}
