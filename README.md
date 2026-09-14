@@ -1,14 +1,18 @@
 # Skill Validator
 
+[![Tests](https://github.com/StepanPenyaz/Skill-validator/actions/workflows/tests.yml/badge.svg)](https://github.com/StepanPenyaz/Skill-validator/actions/workflows/tests.yml)
+
 A repo of Claude Agent Skills, packaged and validated with shared tooling.
 
 ## Layout
 
 ```
 .
+├── .github/workflows/
+│   └── tests.yml           # Runs each skill's own regression suite on push/PR
 ├── scripts/
-│   └── package_skill.py   # Shared packager for every skill below
-├── skill-review/          # Statically reviews other skills for compliance/quality
+│   └── package_skill.py    # Shared packager for every skill below
+├── skill-review/           # Statically reviews other skills for compliance/quality
 └── <future-skill>/
 ```
 
@@ -34,6 +38,11 @@ picture — what each check validates, more usage examples, and how to
 retune a check's severity via `skill-review/references/severity_config.yaml`
 without touching code.
 
+Its own regression suite (`skill-review/tests/run_regression.py`) runs
+every fixture under `skill-review/tests/fixtures/` and asserts the result
+matches what's documented — this is what `.github/workflows/tests.yml`
+runs on every push and PR.
+
 ## Adding a new skill
 
 - Put it at `<repo-root>/<skill-name>/`, with `SKILL.md` at its root.
@@ -54,3 +63,8 @@ without touching code.
   in sync — that script must stay self-contained (it also runs when the
   skill is distributed standalone, without the rest of this repo), so it
   can't import `scripts/package_skill.py` directly.
+- If the new skill has its own test fixtures, give it a
+  `<skill-name>/tests/run_regression.py` (see `skill-review/tests/
+  run_regression.py` for the pattern: plain assertions over subprocess
+  calls to the skill's own CLI scripts, no framework needed) and add a step
+  for it in `.github/workflows/tests.yml`, alongside skill-review's.

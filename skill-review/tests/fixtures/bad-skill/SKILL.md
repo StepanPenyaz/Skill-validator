@@ -20,8 +20,9 @@ This is a minimal fixture skill with deliberate issues, used to confirm
   `Bash`, which isn't declared (under-provisioning candidate).
 - A hardcoded API key is embedded directly in this file (hardcoded-secret
   candidate — expected to be a hard compliance error).
-- `scripts/helper.py` contains a dangerous shell pattern and an undeclared
-  external host.
+- The bundled helper script (the one referenced above as orphaned) contains
+  a dangerous shell pattern and an undeclared external host — deliberately
+  not named by its filename here, or it would no longer be orphaned.
 - The instructions below contain prompt-injection-style and
   prohibited-action-style phrasing.
 

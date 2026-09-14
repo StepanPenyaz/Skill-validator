@@ -4,6 +4,42 @@ All notable changes to the `skill-review` skill are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 versioning follows [SemVer](https://semver.org/).
 
+## [1.8.0] — 2026-09-14
+
+### Added
+- `tests/run_regression.py` (new file): skill-review's own regression
+  suite. Runs `structural_check.py` and `reconcile_reviews.py` against
+  every fixture under `tests/fixtures/` (plus skill-review's own
+  directory) exactly as documented in this README's "Local testing"
+  section, and asserts the result — instead of a human re-running each
+  command by hand and eyeballing the output before every change to
+  `structural_check.py`, `severity_config.yaml`, `reconcile_reviews.py`, or
+  a fixture. Plain assertions over subprocess calls to the real CLI
+  entrypoints; no test-framework dependency added.
+- `.github/workflows/tests.yml` (repo root, new file): runs
+  `tests/run_regression.py` and a packaging sanity check
+  (`scripts/package_skill.py`) on every push and pull request.
+- `findings[].check_id` (new field) on `structural_check.py`'s output: the
+  same stable key used in `references/severity_config.yaml`, now also
+  returned per finding so code (including the new regression suite) can
+  match on a specific check without depending on free-text `issue`/
+  `suggestion` wording, which can be reworded without notice.
+
+### Fixed
+- `tests/fixtures/good-skill/`: added `metadata.version` and the 8
+  `references/preferred-structure.md` section headings. It previously
+  reported 2 structural warnings despite the README claiming (and this
+  repo's own regression suite now enforcing) that it reports zero —
+  neither warning was ever actually exercising a real check regression, so
+  this was silent doc/fixture drift rather than a caught bug.
+- `tests/fixtures/bad-skill/SKILL.md`: its own intro named
+  `scripts/helper.py` by filename while describing a *different* planted
+  issue (the dangerous-shell-pattern one), which accidentally satisfied
+  `orphaned_resource_file`'s "referenced by name somewhere in the body"
+  check — so despite another bullet in the same intro claiming the script
+  is orphaned, that check never actually fired. Reworded to describe the
+  script without naming it, so the fixture matches its own documentation.
+
 ## [1.7.0] — 2026-09-14
 
 ### Added
