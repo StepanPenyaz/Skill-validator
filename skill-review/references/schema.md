@@ -30,7 +30,8 @@ truth; the markdown is generated from it.
     "dangerous_shell_pattern_candidates": [],
     "prompt_injection_phrase_candidates": [],
     "prohibited_action_phrase_candidates": [],
-    "undeclared_external_hosts": []
+    "undeclared_external_hosts": [],
+    "security_scan": {"skipped": false, "forced": false, "checks_skipped": [], "reason": null}
   },
   "findings": [
     {
@@ -69,3 +70,11 @@ truth; the markdown is generated from it.
   injection phrasing, prohibited-action phrasing, undeclared external hosts,
   tool declaration mismatches) are raw regex matches, not verdicts — confirm
   each against real context (per `rubric.md`) before it becomes a finding.
+- `metrics.security_scan`: whether the dangerous-shell-pattern,
+  prompt-injection, and undeclared-host scans ran. `skipped: true` means the
+  skill declared/referenced no shell-executing or network-capable tool, so
+  those three `*_candidates` fields are empty lists by default rather than
+  confirmed-clean — check this before treating an empty list as "scanned,
+  found nothing." `forced: true` means `--force-security-scan` overrode the
+  skip. Hardcoded-secret and prohibited-action-phrase scanning are never
+  gated by this and always run.

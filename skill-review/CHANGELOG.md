@@ -4,6 +4,32 @@ All notable changes to the `skill-review` skill are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 versioning follows [SemVer](https://semver.org/).
 
+## [1.6.0] — 2026-09-14
+
+### Added
+- Cost-conditional security scanning: the dangerous-shell-pattern,
+  prompt-injection, and undeclared-host scans (`scan_patterns` over
+  `DANGEROUS_SHELL_PATTERNS`/`PROMPT_INJECTION_PATTERNS` and
+  `find_undeclared_external_hosts`) now skip by default for a skill whose
+  `allowed-tools` frontmatter and SKILL.md body declare/reference no
+  shell-executing (`Bash`) or network-capable (`WebFetch`/`WebSearch`/any
+  `mcp__*`) tool — measured to add roughly 2x cost with zero benefit on
+  skills that have no way to act on what those scans would find.
+  Hardcoded-secret and prohibited-action-phrase scanning are never gated;
+  both matter regardless of the skill's own tool access.
+- `metrics.security_scan` (new field): `{skipped, forced, checks_skipped,
+  reason}`, always present so the skip is auditable rather than silent —
+  check `skipped` before reading an empty `*_candidates` list as "scanned,
+  found nothing" instead of "didn't look."
+- `--force-security-scan` flag on both `structural_check.py` and
+  `generate_static_report.py`: bypasses the gate and always runs the full
+  scan, for when the heuristic looks wrong for a particular skill.
+  `generate_static_report.py`'s Markdown output now leads with a
+  blockquote note when the scan was skipped.
+- `structural_check.py`'s `compute_tool_usage()` now also returns the raw
+  referenced-tool set (previously computed but not returned), reused by
+  the new `has_shell_or_network_capability()` gate function.
+
 ## [1.5.0] — 2026-09-08
 
 ### Added
