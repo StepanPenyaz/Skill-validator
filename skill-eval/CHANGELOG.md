@@ -4,6 +4,29 @@ All notable changes to the `skill-eval` skill are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 versioning follows [SemVer](https://semver.org/).
 
+## [0.2.0] — 2026-09-20
+
+### Added
+- `SURVEY.md`: survey of existing eval/cost-tracking tools (`claude plugin
+  eval`, promptfoo, Braintrust, LangSmith, DeepEval, the generic
+  LLM-as-judge pattern) with adopt/adapt/reject verdicts and a final
+  recommendation. Headline finding: Anthropic's own `claude plugin eval`
+  is the closest existing thing to this skill's execution harness, worth
+  adapting rather than building from nothing — but no surveyed tool
+  renders the specific per-model comparison table this skill needs, so
+  that layer stays custom regardless.
+- `references/token-capture.md`: resolves the "how does skill-eval get a
+  token count" question from the scaffold's stubbed Workflow step 2. No
+  mechanism in this environment can retrieve a spawned Agent-tool
+  subagent's real token usage (investigated directly, not assumed) — an
+  `Agent`-tool subagent never exposes a `session_id` for any
+  introspection tool to key on. The `claude` CLI subprocess path that
+  would give real numbers needs Node.js, not installed in this
+  environment; decided not to install it to unblock this now. Token count
+  is therefore a labeled estimate (`(prompt + response length) / 4`),
+  explicitly presented as approximate and known to undercount — never as
+  a measured value.
+
 ## [0.1.0] — 2026-09-20
 
 ### Added
