@@ -201,6 +201,70 @@ def _():
     assert_eq(safety_finding["agreement_count"], 1, "the one-off safety finding's agreement_count")
 
 
+# --- diff_reviews.py: deterministic mode (two skill directories) ---
+@check("diff_reviews (deterministic): diff-old-skill -> diff-new-skill is 1 new, 3 resolved, 3 unchanged")
+def _():
+    result = run_json(
+        "diff_reviews.py", FIXTURES / "diff-old-skill", FIXTURES / "diff-new-skill",
+    )
+    assert_eq(result["mode"], "deterministic", "mode")
+    assert_eq(len(result["new_findings"]), 1, "len(new_findings)")
+    assert_eq(result["new_findings"][0]["check_id"], "orphaned_resource_file", "new_findings[0].check_id")
+    assert_eq(len(result["resolved_findings"]), 3, "len(resolved_findings)")
+    assert_eq(result["unchanged_findings_count"], 3, "unchanged_findings_count")
+
+
+@check("diff_reviews (deterministic): --fail-on-new exits 1 when a new finding is introduced")
+def _():
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPTS / "diff_reviews.py"),
+         str(FIXTURES / "diff-old-skill"), str(FIXTURES / "diff-new-skill"), "--fail-on-new"],
+        capture_output=True, text=True,
+    )
+    assert_eq(proc.returncode, 1, "exit code")
+
+
+@check("diff_reviews (deterministic): --fail-on-new exits 0 when no new finding is introduced")
+def _():
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPTS / "diff_reviews.py"),
+         str(FIXTURES / "diff-new-skill"), str(FIXTURES / "diff-new-skill"), "--fail-on-new"],
+        capture_output=True, text=True,
+    )
+    assert_eq(proc.returncode, 0, "exit code (comparing a directory against itself)")
+
+
+# --- diff_reviews.py: qualitative mode (two review.json files) ---
+@check("diff_reviews (qualitative): version-diff old -> new is 1 new, 1 resolved, 1 severity-changed, 1 unchanged")
+def _():
+    runs_dir = FIXTURES / "version-diff"
+    result = run_json(
+        "diff_reviews.py",
+        runs_dir / "example-skill-review-old.json",
+        runs_dir / "example-skill-review-new.json",
+    )
+    assert_eq(result["mode"], "qualitative", "mode")
+    assert_eq(result["overall_verdict"]["old"], "needs_work", "overall_verdict.old")
+    assert_eq(result["overall_verdict"]["new"], "pass_with_suggestions", "overall_verdict.new")
+    assert_eq(len(result["new_findings"]), 1, "len(new_findings)")
+    assert_eq(len(result["resolved_findings"]), 1, "len(resolved_findings)")
+    assert_eq(len(result["severity_changed_findings"]), 1, "len(severity_changed_findings)")
+    assert_eq(result["severity_changed_findings"][0]["old_severity"], "major", "severity_changed_findings[0].old_severity")
+    assert_eq(result["severity_changed_findings"][0]["new_severity"], "minor", "severity_changed_findings[0].new_severity")
+    assert_eq(result["unchanged_findings_count"], 1, "unchanged_findings_count")
+
+
+@check("diff_reviews: rejects mixing a skill directory with a review.json file")
+def _():
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPTS / "diff_reviews.py"),
+         str(FIXTURES / "good-skill"), str(FIXTURES / "version-diff" / "example-skill-review-new.json")],
+        capture_output=True, text=True,
+    )
+    result = json.loads(proc.stdout)
+    assert "fatal_error" in result, f"expected fatal_error for mixed dir+file input, got: {result}"
+
+
 def main():
     print(f"skill-review regression suite — {_checks_run} check(s) run, "
           f"{_checks_run - len(_failures)} passed, {len(_failures)} failed.")

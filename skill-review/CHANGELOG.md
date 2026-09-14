@@ -4,6 +4,44 @@ All notable changes to the `skill-review` skill are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 versioning follows [SemVer](https://semver.org/).
 
+## [1.9.0] — 2026-09-14
+
+### Added
+- `scripts/diff_reviews.py` (new file): folds the previously-external,
+  by-hand version-diffing process into skill-review itself, per
+  `SKILL.md`'s long-standing (but until now unfulfilled) claim that the
+  JSON output is "designed to be diffed across versions." Auto-detects two
+  modes from what its `<old>`/`<new>` arguments point to:
+  - Two skill directories -> deterministic diff. Runs
+    `structural_check.py` against each and diffs `compliance_errors`,
+    `structural_warnings`, and findings (grouped by `check_id` + `location`).
+    No model call.
+  - Two `<skill-name>-review.json` files (the qualitative output) -> diffs
+    `overall_verdict`, `category_scores`, and findings (grouped by
+    `category` + `location`), including `severity_changed_findings` — a
+    severity change on a finding that persists across versions, which only
+    exists in this mode since deterministic severities are fixed per
+    `check_id`, not assigned per instance.
+  - `--markdown` for a human-readable table (mirrors
+    `generate_static_report.py`'s style); `--fail-on-new` exits 1 only if
+    `<new>` introduces a finding `<old>` didn't have, so a CI gate can
+    block a PR on regressions it actually introduced without also blocking
+    on every pre-existing finding; `--force-security-scan` passes through
+    to `structural_check.py` in deterministic mode; `--out` writes to a file.
+  - Mixing one directory and one `.json` file is rejected with a
+    `fatal_error`.
+- `tests/fixtures/diff-old-skill/` + `diff-new-skill/`: a "before"/"after"
+  pair of skill directories exercising the deterministic mode (1 new
+  finding, 3 resolved, 3 unchanged).
+- `tests/fixtures/version-diff/`: a "before"/"after" pair of
+  `<skill-name>-review.json` files exercising the qualitative mode,
+  including one finding's severity downgrading from `major` to `minor`.
+- `references/schema.md`: new "Diffing across versions: the two diff
+  shapes" section documenting both output shapes.
+- 5 new checks in `tests/run_regression.py` covering both modes,
+  `--fail-on-new`'s exit code in both directions, and the mixed-input
+  rejection.
+
 ## [1.8.0] — 2026-09-14
 
 ### Added

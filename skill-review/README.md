@@ -226,6 +226,28 @@ Run 1's one-off safety finding pulled its own `overall_verdict` to
 that finding is recognized as unconfirmed (1 of 3 runs). See
 [`references/schema.md`](references/schema.md) for the full field notes.
 
+**6. Diffing two versions of a skill** — see "Diffing across versions"
+above for both modes; deterministic mode shown here:
+
+```bash
+python3 scripts/diff_reviews.py tests/fixtures/diff-old-skill tests/fixtures/diff-new-skill
+```
+
+```json
+{
+  "mode": "deterministic",
+  "compliance_errors_delta": {"old_count": 0, "new_count": 0},
+  "structural_warnings_delta": {"old_count": 6, "new_count": 4},
+  "new_findings": [{"check_id": "orphaned_resource_file", "...": "..."}],
+  "resolved_findings": [
+    {"check_id": "description_no_trigger_cue", "...": "..."},
+    {"check_id": "description_too_short", "...": "..."},
+    {"check_id": "metadata_version_missing", "...": "..."}
+  ],
+  "unchanged_findings_count": 3
+}
+```
+
 ## Retuning severity
 
 Every check's severity (`Blocker` / `Warning` / `Info`) is looked up at run
@@ -275,10 +297,18 @@ skill-review/
         │   ├── SKILL.md                      # without being one — a precision test, not a
         │   ├── scripts/install.sh            # recall test (see the paragraph below)
         │   └── references/lint-checklist.md
-        └── consistency-runs/                 # 3 synthetic independent review runs of one
-            ├── example-skill-review-run1.json # hypothetical skill, for reconcile_reviews.py
-            ├── example-skill-review-run2.json # to reconcile — see "Self-consistency" above
-            └── example-skill-review-run3.json
+        ├── consistency-runs/                 # 3 synthetic independent review runs of one
+        │   ├── example-skill-review-run1.json # hypothetical skill, for reconcile_reviews.py
+        │   ├── example-skill-review-run2.json # to reconcile — see "Self-consistency" above
+        │   └── example-skill-review-run3.json
+        ├── diff-old-skill/                   # A "before"/"after" pair of skill directories,
+        │   └── SKILL.md                      # for diff_reviews.py's deterministic mode —
+        ├── diff-new-skill/                   # see "Diffing across versions" above
+        │   ├── SKILL.md
+        │   └── scripts/helper.py
+        └── version-diff/                     # A "before"/"after" pair of review.json files,
+            ├── example-skill-review-old.json # for diff_reviews.py's qualitative mode
+            └── example-skill-review-new.json
 ```
 
 `clean-skill-with-tricky-patterns` is the mirror image of `bad-skill`: `bad-
@@ -338,14 +368,24 @@ python3 scripts/reconcile_reviews.py \
   tests/fixtures/consistency-runs/example-skill-review-run1.json \
   tests/fixtures/consistency-runs/example-skill-review-run2.json \
   tests/fixtures/consistency-runs/example-skill-review-run3.json
+
+# Deterministic diff: 1 new finding, 3 resolved, 3 unchanged:
+python3 scripts/diff_reviews.py tests/fixtures/diff-old-skill tests/fixtures/diff-new-skill
+
+# Qualitative diff: 1 new, 1 resolved, 1 severity-changed (major -> minor), 1 unchanged:
+python3 scripts/diff_reviews.py \
+  tests/fixtures/version-diff/example-skill-review-old.json \
+  tests/fixtures/version-diff/example-skill-review-new.json
 ```
 
 `structural_check.py` only prints JSON — it has no side effects and never
 modifies the skill under review. Use it (or `generate_static_report.py` for
 the human-readable version) as a quick sanity check before running the full
 qualitative review, which requires Claude to read the skill and consult
-`references/rubric.md`. `reconcile_reviews.py` is likewise a pure function
-over already-produced review JSON files — it never invokes a model itself.
+`references/rubric.md`. `reconcile_reviews.py` and `diff_reviews.py` are
+likewise pure functions over already-produced output (review JSON files,
+or — for `diff_reviews.py`'s deterministic mode — skill directories it
+runs `structural_check.py` against itself); neither invokes a model.
 `run_regression.py` matches this same pattern: plain assertions over
 subprocess calls to these real CLI entrypoints, stdlib only, no test
 framework dependency.
@@ -387,4 +427,32 @@ This skill is the static/diagnostic layer of the broader evaluation plan —
 it runs before any runtime execution benchmark, and its JSON output is
 designed to be diffed across skill versions (see `overall_verdict` and
 `category_scores` in `references/schema.md`) as a leading indicator ahead
-of full A/B runtime comparisons.
+of full A/B runtime comparisons. `scripts/diff_reviews.py` does that
+diffing directly (see "Diffing across versions" below) instead of it being
+a separate, externally-maintained tool that can drift out of sync with
+`references/schema.md`.
+
+## Diffing across versions
+
+```bash
+# Deterministic diff: two skill directories, no model call.
+python3 scripts/diff_reviews.py old_skill/ new_skill/
+
+# Qualitative diff: two already-produced <skill-name>-review.json files —
+# category_scores, overall_verdict, and severity changes on a finding that
+# persists across versions (something the deterministic layer can't have;
+# see references/schema.md's "Diffing across versions" section for why).
+python3 scripts/diff_reviews.py old-review.json new-review.json
+```
+
+Both modes support `--markdown` (a human-readable table instead of JSON),
+`--out <path>`, and `--fail-on-new` — exits 1 only if `<new>` introduces a
+finding `<old>` didn't have, so a CI gate can block a PR on regressions it
+actually introduced without also blocking on every pre-existing finding.
+Mixing one directory and one `.json` file is rejected — there's no shared
+schema to diff them against. See
+[`tests/fixtures/diff-old-skill/`](tests/fixtures/diff-old-skill/) +
+[`diff-new-skill/`](tests/fixtures/diff-new-skill/) for a worked example of
+the deterministic mode, and
+[`tests/fixtures/version-diff/`](tests/fixtures/version-diff/) for the
+qualitative mode.
