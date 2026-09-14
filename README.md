@@ -26,17 +26,28 @@ The one skill currently in this repo. It statically reviews *other* Claude
 Agent Skills — `SKILL.md` plus bundled resources — against best-practice
 conventions (metadata, structure, permissions/tool usage, security) and
 produces a scored, actionable report, without ever executing the skill
-being reviewed. Run it with:
+being reviewed.
 
-```bash
-python3 skill-review/scripts/structural_check.py <path-to-a-skill>          # raw JSON
-python3 skill-review/scripts/generate_static_report.py <path-to-a-skill>    # human-readable Markdown
-```
+It has two officially supported entry points — pick based on what you
+need, they're not a "lite" version and a "full" version of the same thing:
+
+- **Gate mode** — deterministic, no model call, safe for CI:
+
+  ```bash
+  python3 skill-review/scripts/structural_check.py <path-to-a-skill>          # raw JSON
+  python3 skill-review/scripts/generate_static_report.py <path-to-a-skill>    # human-readable Markdown
+  ```
+
+- **Full review mode** — the complete rubric-based review, requires a
+  Claude session (there's no script for this half): ask Claude to "review
+  this skill" / "audit this SKILL.md" / similar, pointing at the skill's
+  path. Follows `skill-review/SKILL.md`'s Workflow.
 
 See [`skill-review/README.md`](skill-review/README.md) for the full
-picture — what each check validates, more usage examples, and how to
-retune a check's severity via `skill-review/references/severity_config.yaml`
-without touching code.
+picture — the table comparing both modes, what each check validates, more
+usage examples (including diffing two versions of a skill and self-
+consistency across repeated reviews), and how to retune a check's severity
+via `skill-review/references/severity_config.yaml` without touching code.
 
 Its own regression suite (`skill-review/tests/run_regression.py`) runs
 every fixture under `skill-review/tests/fixtures/` and asserts the result

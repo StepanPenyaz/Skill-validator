@@ -2,7 +2,7 @@
 name: skill-review
 description: Statically reviews a Claude Agent Skill's SKILL.md and bundled resources against best-practice conventions — frontmatter compliance, progressive disclosure and file structure, description/triggering strength, writing style (explained reasoning vs. rigid MUST/NEVER directives), overfitting, and safety. Produces both a machine-readable JSON scorecard and a human-readable markdown report, with a concrete suggested rewrite for every flagged issue. Use this whenever the user asks to review, audit, lint, validate, critique, grade, or get feedback on a skill or a SKILL.md file — before publishing a new skill, as a pre-check in a skill-evaluation pipeline, or when comparing two skill versions. Trigger even on casual phrasing like "check this skill", "is this SKILL.md any good", or "what's wrong with my skill" without the user saying "validate" explicitly.
 metadata:
-  version: "1.9.0"
+  version: "1.9.1"
   maintained_by: "Claude Code Skill Evaluation project"
 ---
 
@@ -15,24 +15,48 @@ poorly written" cleanly separate from "this skill performs badly in
 practice" (that second question needs actual runs; see the `skill-creator`
 skill for that if it's available).
 
-The review runs in two layers: a **deterministic pass**
-(`scripts/structural_check.py` computes hard facts and compliance errors)
-and a **qualitative pass** (you read the skill yourself against
-`references/rubric.md` and turn judgment calls into scored findings). Some
-things about a skill are objectively checkable — does the frontmatter
-parse, is the name kebab-case, is the description under 1024 characters.
-Others need judgment — is the description "pushy" enough, does the writing
-explain *why* instead of barking directives, is the skill overfit to one
-narrow example. Both layers are required for a full review; see Workflow.
+skill-review has two officially supported entry points — named explicitly
+so a CI pipeline, or a person deciding what to run, doesn't have to
+reverse-engineer which one they need:
+
+- **Gate mode** — the deterministic layer only: `scripts/structural_check.py`
+  / `scripts/generate_static_report.py`, plus `scripts/diff_reviews.py`
+  when given two skill directories. No model call; same input always
+  produces the same output; safe to run unattended in CI. Some things
+  about a skill are objectively checkable this way — does the frontmatter
+  parse, is the name kebab-case, is the description under 1024 characters,
+  does a line match a hardcoded-secret pattern. Gate mode is a **complete,
+  correct answer** to "give me a fast structural/security check," not a
+  partial or lesser version of a review — don't apologize for stopping
+  there when that's genuinely what was asked for.
+- **Full review mode** — gate mode's output, plus the qualitative pass: you
+  read the skill yourself against `references/rubric.md` and turn judgment
+  calls into scored findings with concrete rewrites. Some things about a
+  skill need judgment, not a regex — is the description "pushy" enough,
+  does the writing explain *why* instead of barking directives, is the
+  skill overfit to one narrow example, is a gate-mode candidate (a
+  MUST/NEVER line, a `curl | bash` pattern) an actual problem in context.
+  This is what "review this skill" means by default; see Workflow.
+
+Reconciling N full review mode runs (self-consistency) and diffing two
+already-produced reviews are both further, optional steps layered on top
+of full review mode — see Workflow steps 6 and Decision Guidelines. Pick
+the entry point based on what's actually being asked for, not by default;
+see Decision Guidelines for the signals that point to each one.
 
 # When to Use
 
 - The user asks to review, audit, lint, validate, critique, grade, or get
   feedback on a skill or a `SKILL.md` file — including casual phrasing like
   "check this skill", "is this SKILL.md any good", or "what's wrong with my
-  skill," without them saying "validate" explicitly.
-- As a pre-check before publishing a new skill.
-- As a gate in a skill-evaluation pipeline.
+  skill," without them saying "validate" explicitly. This is full review
+  mode by default (see Purpose and Decision Guidelines).
+- As a pre-check before publishing a new skill — gate mode is usually
+  enough for this; full review mode if the user also wants writing/rewrite
+  feedback before publishing, not just a pass/fail.
+- As a gate in a skill-evaluation pipeline or CI — this is gate mode, not
+  full review mode (see Purpose and Decision Guidelines): deterministic,
+  no model call, won't false-block on a subjective judgment call.
 - When comparing two versions of the same skill (see Decision Guidelines
   for how the JSON output supports diffing).
 
@@ -198,6 +222,21 @@ narrow example. Both layers are required for a full review; see Workflow.
 
 # Decision Guidelines
 
+- **Gate mode vs. full review mode — decide this first.** Default to full
+  review mode (the complete Workflow) when a human asks in chat to review,
+  audit, grade, or get feedback on a skill — they almost always want the
+  qualitative pass, not just a pass/fail. Switch to gate-mode-only when the
+  ask is explicitly for a fast, deterministic, non-judgmental check: "just
+  run the linter," "quick check before I publish," wiring this into CI or
+  a script, or any phrasing that wants a stable exit code / machine-
+  checkable result rather than prose feedback. In gate mode, run
+  `python3 scripts/generate_static_report.py <path-to-skill-directory>`
+  (add `--out <path>` to write to a file instead of stdout) — or
+  `structural_check.py` directly for raw JSON — instead of the full
+  Workflow, and present that as a complete answer, not a preview of more
+  to come. This is **not** a substitute for Workflow steps 3-5 when full
+  review mode *was* what's wanted — don't silently downgrade to gate mode
+  just because it's faster to produce.
 - If it's genuinely ambiguous what to review (e.g. multiple skills exist
   and the user didn't say which) → ask. Otherwise proceed — don't stall on
   minor ambiguity.
@@ -205,12 +244,6 @@ narrow example. Both layers are required for a full review; see Workflow.
   exist, PyYAML missing — install with
   `pip install pyyaml --break-system-packages` if needed) → fix the
   environment issue and rerun before continuing.
-- If the user wants a quick, purely mechanical rendering of just the
-  deterministic layer — no qualitative confirmation, no rewrites — run
-  `python3 scripts/generate_static_report.py <path-to-skill-directory>`
-  (add `--out <path>` to write to a file instead of stdout) instead of the
-  full Workflow. This is **not** a substitute for Workflow steps 3-5; only
-  reach for it when the user explicitly wants the fast static-only view.
 - If the user doubts the cost-conditional security-scan skip (Workflow step
   2) — e.g. the skill actually shells out or hits the network through a
   path the heuristic doesn't recognize — add `--force-security-scan` to
@@ -242,10 +275,13 @@ narrow example. Both layers are required for a full review; see Workflow.
   when `<new>` introduces a finding `<old>` didn't have, `--out <path>` to
   write to a file). It auto-detects what `<old>`/`<new>` are: two skill
   directories diffs the deterministic layer (`compliance_errors`/
-  `structural_warnings`/findings by `check_id`); two already-produced
+  `structural_warnings`/findings by `check_id`) — this flavor is gate
+  mode's diff, no model call either side; two already-produced
   `<skill-name>-review.json` files diffs the qualitative layer
   (`overall_verdict`/`category_scores`/findings by category+location,
-  including a severity change on a finding that persists across versions).
+  including a severity change on a finding that persists across versions)
+  — this flavor needs full review mode to have already produced both
+  files, but the diff itself is still deterministic, no new model call.
   Mixing one directory and one `.json` file is rejected — there's no shared
   schema to diff them against. This gives a quick signal on whether a
   revision improved structural/writing quality, independent of and prior

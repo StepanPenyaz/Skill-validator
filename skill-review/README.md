@@ -3,7 +3,10 @@
 A Claude Agent Skill that statically reviews other skills (`SKILL.md` +
 bundled resources) against best-practice conventions and produces a scored,
 actionable report — before the skill is published, as a pre-check in a
-skill-evaluation pipeline, or when comparing two versions of a skill.
+skill-evaluation pipeline, or when comparing two versions of a skill. Two
+official entry points, not one: a deterministic **gate mode** (no model
+call, CI-safe) and a qualitative **full review mode** (requires Claude) —
+see "Two entry points" below for which one you want.
 
 This `README.md` is for **human developers** maintaining this skill in
 version control. `SKILL.md` is the **model-facing** file Claude actually
@@ -23,22 +26,53 @@ separates "this skill is malformed / poorly written" from "this skill
 performs badly in practice" (that second question needs actual runs — see
 the `skill-creator` skill for that if it's available).
 
-## Two layers
+## Two entry points: gate mode and full review mode
 
-1. **Linter** (deterministic) — `scripts/structural_check.py` reads a skill
-   directory and computes hard facts and compliance errors: no judgment, no
-   false positives from misreading intent, same input always produces the
-   same output.
-2. **Static Quality** (qualitative) — a model reads the skill itself against
-   `references/rubric.md` and turns judgment calls (is the description
-   pushy enough, does the writing explain *why* instead of barking MUST/
-   NEVER, is the skill overfit to one example) into scored findings with
-   concrete rewrites. Driven by `SKILL.md` Steps 3-5.
+The two layers below are also the two officially supported ways to *use*
+`skill-review` — named explicitly so a CI pipeline, or a person deciding
+what to run, doesn't have to reverse-engineer which one they need. Pick
+based on what's actually being asked for; neither is a lesser version of
+the other.
 
-Never skip straight to writing a review from the Linter's output alone —
-several of its checks are only *candidate* signals (an orphaned-looking
+1. **Gate mode** (deterministic) — `scripts/structural_check.py` /
+   `scripts/generate_static_report.py`, plus `scripts/diff_reviews.py` when
+   given two skill directories. No model call: hard facts and compliance
+   errors only — no judgment, no false positives from misreading intent,
+   same input always produces the same output, safe to run unattended.
+   This is the **Linter** layer. Use it for CI, a pre-publish sanity check,
+   or anything that needs a stable machine-checkable result rather than
+   prose feedback.
+2. **Full review mode** (qualitative) — the complete process in `SKILL.md`
+   (Workflow Steps 1-5): Claude runs gate mode first, then reads the skill
+   itself against `references/rubric.md` and turns judgment calls (is the
+   description pushy enough, does the writing explain *why* instead of
+   barking MUST/NEVER, is the skill overfit to one example) into scored
+   findings with concrete rewrites. This is the **Static Quality** layer.
+   Use it for an actual "review this skill" request, or anything needing a
+   rubric score or rewrite suggestions. Requires a Claude session — there's
+   no script for this half.
+
+|  | Gate mode | Full review mode |
+|---|---|---|
+| Needs a model call? | No | Yes |
+| Deterministic? | Yes — same input, same output | No — judgment varies run to run (see "Self-consistency" below) |
+| Catches | Malformed frontmatter, hardcoded secrets, orphaned files, dangerous-looking patterns (as *candidates*, not verdicts) | Everything gate mode catches, **plus** writing quality, triggering strength, and whether a gate-mode candidate is an actual problem in context |
+| Reach for it when | Wiring this into CI/a script; "just run the linter"; a quick pre-publish check | A human asks to review, audit, grade, or get feedback; a rewrite or rubric score is needed |
+
+Self-consistency (below) and diffing (`scripts/diff_reviews.py`, further
+down) are optional extensions layered on top of these two entry points,
+not third and fourth modes of their own — self-consistency runs full
+review mode N times; `diff_reviews.py`'s two flavors diff either two gate
+mode runs or two full review mode runs, and the diff itself is always
+deterministic (no new model call), even for the full-review-mode flavor.
+
+Never skip straight to writing a full review from gate mode's output alone
+— several of its checks are only *candidate* signals (an orphaned-looking
 file, a phrase that resembles prompt injection) that need confirmation
-against the real text before they're reported as findings.
+against the real text before they're reported as findings. Gate mode is
+never a substitute for full review mode when full review mode is what was
+actually asked for — but it's also not an incomplete version of it when a
+fast deterministic check is what's wanted; see the table above.
 
 ## What it validates
 
@@ -435,13 +469,15 @@ a separate, externally-maintained tool that can drift out of sync with
 ## Diffing across versions
 
 ```bash
-# Deterministic diff: two skill directories, no model call.
+# Gate mode diff: two skill directories, no model call.
 python3 scripts/diff_reviews.py old_skill/ new_skill/
 
-# Qualitative diff: two already-produced <skill-name>-review.json files —
-# category_scores, overall_verdict, and severity changes on a finding that
-# persists across versions (something the deterministic layer can't have;
-# see references/schema.md's "Diffing across versions" section for why).
+# Full review mode diff: two already-produced <skill-name>-review.json
+# files — category_scores, overall_verdict, and severity changes on a
+# finding that persists across versions (something a gate mode diff can't
+# have; see references/schema.md's "Diffing across versions" section for
+# why). The diff itself is still deterministic, no new model call — full
+# review mode only needs to have already produced both input files.
 python3 scripts/diff_reviews.py old-review.json new-review.json
 ```
 
