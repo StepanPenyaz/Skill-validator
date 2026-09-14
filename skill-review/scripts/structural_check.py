@@ -79,6 +79,22 @@ KNOWN_TOOL_NAMES = (
 )
 MCP_TOOL_PATTERN = re.compile(r"\bmcp__[A-Za-z0-9_]+\b")
 
+# Cost-conditional security scanning (check_id: security_scan_skipped_*):
+# the shell-pattern, prompt-injection, and undeclared-host regex scans below
+# exist to catch a skill *acting* on dangerous content — running a shell
+# command, fetching a URL. A skill with no shell-executing and no
+# network-capable tool declared or referenced can't act on any of those
+# findings, so scanning for them is pure overhead. hardcoded_secret and
+# prohibited_action_phrase are NOT gated by this: a hardcoded credential is
+# a problem regardless of what the skill can run, and prohibited-action
+# phrasing (e.g. "enter the password") targets the user reading the text,
+# not the skill's own tool access.
+SHELL_CAPABLE_TOOL_NAMES = {"Bash"}
+NETWORK_CAPABLE_TOOL_NAMES = {"WebFetch", "WebSearch"}
+SECURITY_SCAN_GATED_CHECK_IDS = (
+    "dangerous_shell_pattern", "prompt_injection_phrase", "undeclared_external_host",
+)
+
 # Hardcoded secret/credential patterns (check_id: hardcoded_secret — Blocker
 # by default in severity_config.yaml). Unlike the other pattern groups
 # below, this one skips the "candidate" treatment because the cost of
@@ -456,7 +472,25 @@ def compute_tool_usage(frontmatter, body):
     # Only meaningful once allowed-tools is actually declared — with no frontmatter
     # restriction at all there's no "undeclared" tool to flag.
     referenced_but_undeclared = sorted(t for t in referenced if declared_set and t not in declared_set)
-    return declared, declared_but_unreferenced, referenced_but_undeclared
+    return declared, referenced, declared_but_unreferenced, referenced_but_undeclared
+
+
+def has_shell_or_network_capability(declared_tools, referenced_tools):
+    """True if the skill declares or references a tool that could actually act on a
+    shell-pattern/prompt-injection/undeclared-host finding (run a command, hit a
+    URL). Checks both declared and referenced rather than just one, matching
+    compute_tool_usage's own over-/under-provisioning cross-check — a tool used in
+    the body but missing from allowed-tools is still a capability the skill exercises."""
+    combined = set(declared_tools) | set(referenced_tools)
+    if combined & SHELL_CAPABLE_TOOL_NAMES:
+        return True
+    if combined & NETWORK_CAPABLE_TOOL_NAMES:
+        return True
+    # An MCP tool is unbounded in what it can do server-side; treat any as
+    # network-capable rather than trying to guess per-server.
+    if any(t.startswith("mcp__") for t in combined):
+        return True
+    return False
 
 
 def scan_for_secrets(files):
@@ -494,12 +528,18 @@ def find_undeclared_external_hosts(files, description):
     return sorted(h for h in hosts if h not in description)
 
 
-def run_checks(skill_path):
+def run_checks(skill_path, force_security_scan=False):
     """Runs every check against skill_path and returns the full result dict
     (or {"fatal_error": ...} on setup problems — missing SKILL.md, or a
     missing/invalid severity_config.yaml). Doesn't print or exit, so callers
     other than this script's own CLI (e.g. scripts/generate_static_report.py)
-    can call it directly."""
+    can call it directly.
+
+    force_security_scan=True bypasses the cost-conditional gate (see
+    has_shell_or_network_capability) and always runs the dangerous-shell-
+    pattern, prompt-injection, and undeclared-host scans, even for a skill
+    with no shell/network-capable tool declared or referenced — use this if
+    the heuristic seems wrong for a particular skill."""
     try:
         severity_config = load_severity_config()
     except ValueError as e:
@@ -632,7 +672,8 @@ def run_checks(skill_path):
         )
 
     # --- Tool/MCP usage cross-check (candidates) ---
-    declared_tools, declared_but_unreferenced, referenced_but_undeclared = compute_tool_usage(frontmatter, body)
+    declared_tools, referenced_tools, declared_but_unreferenced, referenced_but_undeclared = \
+        compute_tool_usage(frontmatter, body)
     metrics["declared_tools"] = declared_tools
     metrics["tools_declared_but_unreferenced"] = declared_but_unreferenced
     metrics["tools_referenced_but_undeclared"] = referenced_but_undeclared
@@ -663,7 +704,31 @@ def run_checks(skill_path):
             location=f"{hit['file']}:{hit['line']}",
         )
 
-    dangerous_shell_hits = scan_patterns(scannable_files, DANGEROUS_SHELL_PATTERNS)
+    # Cost-conditional gate: dangerous-shell-pattern, prompt-injection, and
+    # undeclared-host findings only matter if the skill can actually act on
+    # them — run a command, fetch a URL. Skip those three scans (not
+    # hardcoded_secret or prohibited_action_phrase, see the module-level
+    # comment by SECURITY_SCAN_GATED_CHECK_IDS) when no shell/network tool is
+    # declared or referenced, unless force_security_scan overrides it. Always
+    # recorded in metrics["security_scan"] so the skip is visible, never silent.
+    has_capability = has_shell_or_network_capability(declared_tools, referenced_tools)
+    run_gated_scans = has_capability or force_security_scan
+    metrics["security_scan"] = {
+        "skipped": not run_gated_scans,
+        "forced": force_security_scan,
+        "checks_skipped": [] if run_gated_scans else list(SECURITY_SCAN_GATED_CHECK_IDS),
+        "reason": None if run_gated_scans else (
+            "No shell-executing (Bash) or network-capable (WebFetch/WebSearch/MCP) tool "
+            "declared in allowed-tools or referenced in the SKILL.md body; this skill can't "
+            "act on a shell-pattern, prompt-injection, or undeclared-host finding. Re-run "
+            "with force_security_scan=True (--force-security-scan on the CLI) to scan anyway."
+        ),
+    }
+
+    if run_gated_scans:
+        dangerous_shell_hits = scan_patterns(scannable_files, DANGEROUS_SHELL_PATTERNS)
+    else:
+        dangerous_shell_hits = []
     metrics["dangerous_shell_pattern_candidates"] = dangerous_shell_hits
     for hit in dangerous_shell_hits:
         add_finding(
@@ -674,7 +739,10 @@ def run_checks(skill_path):
             location=f"{hit['file']}:{hit['line']}",
         )
 
-    prompt_injection_hits = scan_patterns(scannable_files, PROMPT_INJECTION_PATTERNS)
+    if run_gated_scans:
+        prompt_injection_hits = scan_patterns(scannable_files, PROMPT_INJECTION_PATTERNS)
+    else:
+        prompt_injection_hits = []
     metrics["prompt_injection_phrase_candidates"] = prompt_injection_hits
     for hit in prompt_injection_hits:
         add_finding(
@@ -696,7 +764,10 @@ def run_checks(skill_path):
             location=f"{hit['file']}:{hit['line']}",
         )
 
-    undeclared_hosts = find_undeclared_external_hosts(scannable_files, frontmatter.get("description"))
+    if run_gated_scans:
+        undeclared_hosts = find_undeclared_external_hosts(scannable_files, frontmatter.get("description"))
+    else:
+        undeclared_hosts = []
     metrics["undeclared_external_hosts"] = undeclared_hosts
     for host in undeclared_hosts:
         add_finding(
@@ -727,14 +798,19 @@ def run_checks(skill_path):
 
 
 def main():
-    if len(sys.argv) != 2:
-        fail("Usage: python structural_check.py <skill_directory>")
+    args = sys.argv[1:]
+    force_security_scan = "--force-security-scan" in args
+    if force_security_scan:
+        args = [a for a in args if a != "--force-security-scan"]
 
-    skill_path = Path(sys.argv[1])
+    if len(args) != 1:
+        fail("Usage: python structural_check.py <skill_directory> [--force-security-scan]")
+
+    skill_path = Path(args[0])
     if not skill_path.is_dir():
         fail(f"Not a directory: {skill_path}")
 
-    result = run_checks(skill_path)
+    result = run_checks(skill_path, force_security_scan=force_security_scan)
     if "fatal_error" in result:
         fail(result["fatal_error"])
 

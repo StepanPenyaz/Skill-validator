@@ -2,7 +2,7 @@
 name: skill-review
 description: Statically reviews a Claude Agent Skill's SKILL.md and bundled resources against best-practice conventions — frontmatter compliance, progressive disclosure and file structure, description/triggering strength, writing style (explained reasoning vs. rigid MUST/NEVER directives), overfitting, and safety. Produces both a machine-readable JSON scorecard and a human-readable markdown report, with a concrete suggested rewrite for every flagged issue. Use this whenever the user asks to review, audit, lint, validate, critique, grade, or get feedback on a skill or a SKILL.md file — before publishing a new skill, as a pre-check in a skill-evaluation pipeline, or when comparing two skill versions. Trigger even on casual phrasing like "check this skill", "is this SKILL.md any good", or "what's wrong with my skill" without the user saying "validate" explicitly.
 metadata:
-  version: "1.5.0"
+  version: "1.6.0"
   maintained_by: "Claude Code Skill Evaluation project"
 ---
 
@@ -75,6 +75,17 @@ narrow example. Both layers are required for a full review; see Workflow.
    phrasing, undeclared external hosts).
 
    If `fatal_error` is present, see Decision Guidelines.
+
+   `dangerous_shell_pattern_candidates`, `prompt_injection_phrase_candidates`,
+   and `undeclared_external_hosts` are skipped by default (empty lists) for a
+   skill that declares and references no shell-executing (Bash) or
+   network-capable (WebFetch/WebSearch/MCP) tool — it can't act on any of
+   those findings, so scanning for them is pure overhead. Check
+   `metrics.security_scan.skipped` before treating an empty list there as
+   "found nothing" rather than "didn't look." If a skill's tool declarations
+   look wrong, or you want the full scan regardless, re-run with
+   `--force-security-scan`. `hardcoded_secret_candidates` and
+   `prohibited_action_phrase_candidates` are never skipped by this gate.
 
    Every check the script runs also lands in `result["findings"]` — the
    same facts as `compliance_errors`/`structural_warnings`, but structured
@@ -175,6 +186,11 @@ narrow example. Both layers are required for a full review; see Workflow.
   (add `--out <path>` to write to a file instead of stdout) instead of the
   full Workflow. This is **not** a substitute for Workflow steps 3-5; only
   reach for it when the user explicitly wants the fast static-only view.
+- If the user doubts the cost-conditional security-scan skip (Workflow step
+  2) — e.g. the skill actually shells out or hits the network through a
+  path the heuristic doesn't recognize — add `--force-security-scan` to
+  either script to run the full scan regardless of declared/referenced
+  tools.
 - If the user just wants a quick verdict in chat rather than files → it's
   fine to summarize inline instead of writing output files. Use judgment
   based on how the request was phrased ("give me a quick take" vs. "review

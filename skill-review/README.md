@@ -74,6 +74,17 @@ Every check above maps to a `check_id` in
 [`references/severity_config.yaml`](references/severity_config.yaml) —
 see **Retuning severity** below.
 
+**Cost-conditional scanning** — the dangerous-shell-pattern, prompt-
+injection, and undeclared-host scans only matter if the skill being checked
+can actually act on what they'd find (run a shell command, fetch a URL), so
+they're skipped by default for a skill whose `allowed-tools` and SKILL.md
+body declare/reference no shell-executing or network-capable tool. The skip
+is never silent: `metrics.security_scan` always records whether it happened
+and why, and the Markdown report calls it out with a blockquote note.
+Hardcoded-secret and prohibited-action-phrase scanning are never skipped —
+those matter regardless of the skill's own tool access. Pass
+`--force-security-scan` to either script to run the full scan anyway.
+
 ## Examples of use
 
 ```bash
@@ -129,7 +140,29 @@ python3 scripts/generate_static_report.py tests/fixtures/bad-skill --out report.
 ...
 ```
 
-**3. Full qualitative review** (`<skill-name>-review.json` + `.md`, with
+**3. A skill with no shell/network tools** — the security scan's most
+expensive checks skip automatically, with the skip recorded rather than
+silent:
+
+```bash
+python3 scripts/generate_static_report.py tests/fixtures/good-skill
+```
+
+```markdown
+# Static Check Report: good-skill
+
+0 blocker(s), 2 warning(s), 0 info-level suggestion(s).
+
+> **Security scan partially skipped:** No shell-executing (Bash) or
+> network-capable (WebFetch/WebSearch/MCP) tool declared in allowed-tools or
+> referenced in the SKILL.md body; ... (skipped checks: dangerous_shell_pattern,
+> prompt_injection_phrase, undeclared_external_host)
+...
+```
+
+Add `--force-security-scan` to either script to run those checks anyway.
+
+**4. Full qualitative review** (`<skill-name>-review.json` + `.md`, with
 rubric-based scoring and concrete rewrites) isn't a script — it's Claude
 following `SKILL.md` Steps 1-5, using the Linter's output above as its
 starting facts.

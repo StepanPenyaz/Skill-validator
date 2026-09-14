@@ -13,9 +13,12 @@ Warning/Info-level candidate against real context before treating it as a
 scored finding.
 
 Usage:
-    python generate_static_report.py <skill_directory> [--out <path>]
+    python generate_static_report.py <skill_directory> [--out <path>] [--force-security-scan]
 
-Prints Markdown to stdout, or writes it to --out if given.
+Prints Markdown to stdout, or writes it to --out if given. --force-security-scan
+bypasses structural_check.py's cost-conditional gate (see its
+has_shell_or_network_capability) and always runs the dangerous-shell-pattern,
+prompt-injection, and undeclared-host scans.
 """
 
 import sys
@@ -40,7 +43,7 @@ CATEGORY_ORDER = [
 SEVERITY_ORDER = {"Blocker": 0, "Warning": 1, "Info": 2}
 
 
-def render_markdown_report(skill_name, findings):
+def render_markdown_report(skill_name, findings, security_scan=None):
     counts = {"Blocker": 0, "Warning": 0, "Info": 0}
     for f in findings:
         counts[f["severity"]] += 1
@@ -52,6 +55,13 @@ def render_markdown_report(skill_name, findings):
         f"{counts['Info']} info-level suggestion(s).",
         "",
     ]
+
+    if security_scan and security_scan.get("skipped"):
+        lines.append(
+            f"> **Security scan partially skipped:** {security_scan['reason']} "
+            f"(skipped checks: {', '.join(security_scan['checks_skipped'])})"
+        )
+        lines.append("")
 
     if not findings:
         lines.append("No issues found by the static checker.")
@@ -82,32 +92,40 @@ def render_markdown_report(skill_name, findings):
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Error: Usage: python generate_static_report.py <skill_directory> [--out <path>]",
-              file=sys.stderr)
+    args = sys.argv[1:]
+    force_security_scan = "--force-security-scan" in args
+    if force_security_scan:
+        args = [a for a in args if a != "--force-security-scan"]
+
+    if len(args) < 1:
+        print(
+            "Error: Usage: python generate_static_report.py <skill_directory> "
+            "[--out <path>] [--force-security-scan]",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
-    skill_dir = sys.argv[1]
+    skill_dir = args[0]
     out_path = None
-    if "--out" in sys.argv:
-        idx = sys.argv.index("--out")
-        if idx + 1 >= len(sys.argv):
+    if "--out" in args:
+        idx = args.index("--out")
+        if idx + 1 >= len(args):
             print("Error: --out requires a path argument.", file=sys.stderr)
             sys.exit(1)
-        out_path = sys.argv[idx + 1]
+        out_path = args[idx + 1]
 
     skill_path = Path(skill_dir)
     if not skill_path.is_dir():
         print(f"Error: Not a directory: {skill_path}", file=sys.stderr)
         sys.exit(1)
 
-    result = sc.run_checks(skill_path)
+    result = sc.run_checks(skill_path, force_security_scan=force_security_scan)
     if "fatal_error" in result:
         print(f"Error: {result['fatal_error']}", file=sys.stderr)
         sys.exit(1)
 
     skill_name = result["frontmatter"].get("name") or skill_path.name
-    report = render_markdown_report(skill_name, result["findings"])
+    report = render_markdown_report(skill_name, result["findings"], result["metrics"].get("security_scan"))
 
     if out_path:
         Path(out_path).write_text(report, encoding="utf-8")
