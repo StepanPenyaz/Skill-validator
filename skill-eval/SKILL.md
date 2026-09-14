@@ -2,7 +2,7 @@
 name: skill-eval
 description: Runs a Claude Agent Skill against real tasks and reports what it actually cost to do so — model used, token count, wall-clock time, and a short qualitative judgment of how the run went. Use this whenever the user asks to evaluate a skill's runtime cost, compare how a skill performs across models, measure a skill's token/time cost, or wants to know whether a new version of a skill is worth its cost relative to the old one. Not for asking whether a SKILL.md is well-written — that's skill-review.
 metadata:
-  version: "0.3.0"
+  version: "0.4.0"
   maintained_by: "Claude Code Skill Evaluation project"
 ---
 
@@ -68,11 +68,12 @@ place. See Workflow.
      of silently dropping them.
 
 > Steps 2-4 are stubs — filled in by later work:
-> 2. Run the target skill against a fixed task-fixture set, once per model
->    in the configured model list, capturing model/time per run for real
->    and token count as a labeled estimate — see
->    `references/token-capture.md` for why it's an estimate, not a
->    measurement, and how it's computed.
+> 2. Run the target skill against a fixed task-fixture set from
+>    `tests/fixtures/tasks/<skill-name>.yaml` (format and authoring
+>    methodology: `references/task-authoring.md`), once per model in the
+>    configured model list, capturing model/time per run for real and
+>    token count as a labeled estimate — see `references/token-capture.md`
+>    for why it's an estimate, not a measurement, and how it's computed.
 > 3. Write a short qualitative judgment per run.
 > 4. Render the results as one table: Model Used | Number of Tokens | Time
 >    Spent | Claude's Judgment.
@@ -102,10 +103,12 @@ place. See Workflow.
 
 # References
 
+- `references/task-authoring.md` — the `tests/fixtures/tasks/<skill-name>.yaml`
+  format and how to write one. See Workflow step 2.
 - `references/token-capture.md` — why the "Number of Tokens" column is a
   labeled estimate, not a measurement, in this environment, and how the
   estimate is computed. See Workflow step 2.
 - `../SURVEY.md` — survey of existing eval/cost-tracking tools and why
   `skill-eval` is mostly custom-built rather than adopting one wholesale.
-- More to come as `references/` files are added (task-fixture format,
-  models configuration, etc.).
+- More to come as `references/` files are added (models configuration,
+  etc.).
