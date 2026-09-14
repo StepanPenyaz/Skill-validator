@@ -264,6 +264,7 @@ skill-review/
 │   ├── preferred-structure.md    # Recommended (not required) SKILL.md section outline
 │   └── severity_config.yaml      # Editable check_id -> severity policy (see above)
 └── tests/
+    ├── run_regression.py                     # Runs every fixture below and asserts the result
     └── fixtures/
         ├── good-skill/                       # Minimal skill that should pass cleanly
         │   └── SKILL.md
@@ -300,12 +301,24 @@ added to this repo should follow the same convention.
 
 ```bash
 pip install -r requirements.txt
+python3 tests/run_regression.py
+```
 
+`tests/run_regression.py` runs every command below (and asserts its
+result), so it's the one command to run before pushing a change to
+`structural_check.py`, `severity_config.yaml`, `reconcile_reviews.py`, or a
+fixture — `.github/workflows/tests.yml` runs the same command on every push
+and PR. Each individual check it runs, spelled out:
+
+```bash
 # Should report zero compliance errors and zero structural warnings:
 python3 scripts/structural_check.py tests/fixtures/good-skill
 
 # Should report specific known issues (see tests/fixtures/bad-skill/SKILL.md
-# comments for what each one is testing):
+# comments for what each one is testing) — run_regression.py checks the
+# check_id of each one individually, not just a raw finding count, so a
+# check silently breaking can't hide behind an unrelated one over-firing by
+# the same amount:
 python3 scripts/structural_check.py tests/fixtures/bad-skill
 
 # Should also report zero compliance errors and zero structural warnings —
@@ -333,6 +346,9 @@ the human-readable version) as a quick sanity check before running the full
 qualitative review, which requires Claude to read the skill and consult
 `references/rubric.md`. `reconcile_reviews.py` is likewise a pure function
 over already-produced review JSON files — it never invokes a model itself.
+`run_regression.py` matches this same pattern: plain assertions over
+subprocess calls to these real CLI entrypoints, stdlib only, no test
+framework dependency.
 
 ## Versioning
 

@@ -1,0 +1,35 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  skill-review:
+    name: skill-review regression suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r skill-review/requirements.txt
+
+      # skill-review/tests/run_regression.py runs structural_check.py and
+      # reconcile_reviews.py against every tests/fixtures/ case (plus
+      # skill-review's own directory) exactly as documented in
+      # skill-review/README.md's "Local testing" section, and fails the
+      # build if any of them stop matching what's documented there.
+      - name: Run skill-review's regression suite
+        run: python3 skill-review/tests/run_regression.py
+
+      # A clean structural_check.py run doesn't guarantee the skill still
+      # packages — this exercises the same "exactly one shipped SKILL.md"
+      # rule package_skill.py enforces, so a packaging regression fails CI
+      # too, not just a local `git push` surprise.
+      - name: Verify skill-review still packages cleanly
+        run: python3 scripts/package_skill.py skill-review /tmp/dist

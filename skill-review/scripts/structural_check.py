@@ -7,11 +7,14 @@ references/rubric.md) — it only computes objective facts and hard-compliance
 errors so the qualitative review has real numbers to reason about instead of
 re-deriving them by eye.
 
-Every check also records a structured "finding" (category, severity, an
-issue description, a suggested fix, and a location when applicable) in
-result["findings"], in addition to the long-standing flat
-compliance_errors/structural_warnings lists (still derived from the same
-findings, for backward compatibility) and metrics.
+Every check also records a structured "finding" (category, a stable
+check_id, severity, an issue description, a suggested fix, and a location
+when applicable) in result["findings"], in addition to the long-standing
+flat compliance_errors/structural_warnings lists (still derived from the
+same findings, for backward compatibility) and metrics. check_id is the
+same key used in references/severity_config.yaml — match on it (not on the
+free-text issue/suggestion, which can be reworded) when writing code or
+tests against specific checks; see tests/run_regression.py for an example.
 scripts/generate_static_report.py renders result["findings"] as a
 human-readable, per-category Markdown report.
 
@@ -207,6 +210,7 @@ def add_finding(findings, severity_config, category, check_id, issue, suggestion
         )
     findings.append({
         "category": category,
+        "check_id": check_id,
         "severity": severity_config[check_id]["severity"],
         "issue": issue,
         "suggestion": suggestion,
