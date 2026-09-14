@@ -4,6 +4,18 @@ All notable changes to the `skill-eval` skill are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 versioning follows [SemVer](https://semver.org/).
 
+## [0.3.0] — 2026-09-20
+
+### Added
+- Workflow step 1 (gate check): runs `skill-review`'s gate mode against
+  the target skill directory before anything else and stops immediately
+  if `compliance_errors` is non-empty, reporting the failure verbatim
+  instead of proceeding.
+- A Rules entry making the stop condition non-optional, and a Decision
+  Guidelines entry covering `structural_warnings`: not blocking, but
+  carried forward and surfaced alongside the final report rather than
+  silently dropped.
+
 ## [0.2.0] — 2026-09-20
 
 ### Added

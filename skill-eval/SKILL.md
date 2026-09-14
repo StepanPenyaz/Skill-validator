@@ -2,7 +2,7 @@
 name: skill-eval
 description: Runs a Claude Agent Skill against real tasks and reports what it actually cost to do so — model used, token count, wall-clock time, and a short qualitative judgment of how the run went. Use this whenever the user asks to evaluate a skill's runtime cost, compare how a skill performs across models, measure a skill's token/time cost, or wants to know whether a new version of a skill is worth its cost relative to the old one. Not for asking whether a SKILL.md is well-written — that's skill-review.
 metadata:
-  version: "0.2.0"
+  version: "0.3.0"
   maintained_by: "Claude Code Skill Evaluation project"
 ---
 
@@ -49,9 +49,25 @@ place. See Workflow.
 
 # Workflow
 
-> Stub — filled in by later work. Planned steps, in order:
-> 1. Run `skill-review`'s gate mode against the target skill directory;
->    stop on any breaking (Blocker) finding.
+1. **Run the gate check.** Before doing anything else, run `skill-review`'s
+   gate mode against the target skill directory:
+
+   ```bash
+   python3 ../skill-review/scripts/structural_check.py <target-skill-directory>
+   ```
+
+   This is deterministic and makes no model call. Then:
+   - If `compliance_errors` is non-empty (any Blocker-severity finding —
+     malformed frontmatter, a hardcoded secret, etc.) → **stop
+     immediately**. Report the gate failure to the user, quoting the
+     `compliance_errors` entries verbatim, and do not proceed to running
+     the target skill at all.
+   - If `compliance_errors` is empty → continue to step 2.
+     `structural_warnings` (Warning/Info-severity findings) are **not**
+     blocking — see Decision Guidelines for what to do with them instead
+     of silently dropping them.
+
+> Steps 2-4 are stubs — filled in by later work:
 > 2. Run the target skill against a fixed task-fixture set, once per model
 >    in the configured model list, capturing model/time per run for real
 >    and token count as a labeled estimate — see
@@ -63,15 +79,26 @@ place. See Workflow.
 
 # Rules
 
-- Never proceed past a failed gate check (see Workflow step 1 once
-  written) — a skill with a Blocker-severity finding shouldn't be run to
-  measure its cost or behavior.
+- **Never proceed past a failed gate check.** If Workflow step 1's
+  `compliance_errors` is non-empty, stop there — report the failure and do
+  not run the target skill. This is not optional or a judgment call: a
+  skill with a Blocker-severity finding shouldn't be run to measure its
+  cost or behavior, regardless of how the user phrased the request.
 - Never collapse a run's judgment into a numeric score — report concrete,
   verifiable observations instead.
 
 # Decision Guidelines
 
-> To be filled in alongside the Workflow steps above.
+- **`structural_warnings` from the gate check are not blocking — proceed,
+  but don't drop them.** A skill can have Warning/Info-severity findings
+  (an orphaned resource file, a missing `metadata.version`, a dangerous-
+  shell-pattern candidate) and still be safe to run. Continue to step 2,
+  but carry the warning count forward and surface it alongside the final
+  report — e.g. a short "Gate check: N structural warning(s), not
+  blocking" note near the results table — so the user can see the target
+  skill wasn't perfectly clean even though evaluation proceeded, instead
+  of that information silently disappearing after step 1.
+- More to come as later Workflow steps are filled in.
 
 # References
 
