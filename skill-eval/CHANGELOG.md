@@ -4,6 +4,31 @@ All notable changes to the `skill-eval` skill are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 versioning follows [SemVer](https://semver.org/).
 
+## [0.9.0] — 2026-09-20
+
+### Added
+- Workflow step 2 (run the target skill per model), replacing its stub —
+  the last of the four Workflow steps to go from stub to real. For each
+  model in the resolved model list, spawns one `Agent`-tool subagent
+  covering *all* tasks from `tests/fixtures/tasks/<skill-name>.yaml` in a
+  single conversation (not one subagent per task — that's what makes "one
+  row per model" in the final table a real per-model cost rather than a
+  single arbitrary task's cost). The subagent's prompt explicitly tells it
+  to read the target skill's `SKILL.md` and follow it, since a target
+  skill sitting in this repo isn't necessarily auto-loaded for a fresh
+  subagent, and to self-report an approximate token count
+  (`Approx. tokens used: ~N (estimated)`) as the last line of its final
+  report, per `references/token-capture.md`'s decision — the orchestrator
+  captures wall-clock time itself and parses the token estimate back out
+  of that same final report, rather than requesting it as a separate
+  side-channel value.
+- Two new Rules: never invent tasks on the fly if no fixture exists for
+  the target skill; always one subagent per model covering every task,
+  never one subagent per task.
+- A new Decision Guidelines entry for the missing-task-fixture case:
+  don't guess, tell the user, offer to author one per
+  `references/task-authoring.md`.
+
 ## [0.8.0] — 2026-09-20
 
 ### Added
