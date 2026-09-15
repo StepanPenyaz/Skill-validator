@@ -2,7 +2,7 @@
 name: skill-eval
 description: Runs a Claude Agent Skill against real tasks and reports what it actually cost to do so — model used, token count, wall-clock time, and a short qualitative judgment of how the run went. Use this whenever the user asks to evaluate a skill's runtime cost, compare how a skill performs across models, measure a skill's token/time cost, or wants to know whether a new version of a skill is worth its cost relative to the old one. Not for asking whether a SKILL.md is well-written — that's skill-review.
 metadata:
-  version: "0.5.0"
+  version: "0.6.0"
   maintained_by: "Claude Code Skill Evaluation project"
 ---
 
