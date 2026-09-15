@@ -2,7 +2,7 @@
 name: skill-eval
 description: Runs a Claude Agent Skill against real tasks and reports what it actually cost to do so — model used, token count, wall-clock time, and a short qualitative judgment of how the run went. Use this whenever the user asks to evaluate a skill's runtime cost, compare how a skill performs across models, measure a skill's token/time cost, or wants to know whether a new version of a skill is worth its cost relative to the old one. Not for asking whether a SKILL.md is well-written — that's skill-review.
 metadata:
-  version: "0.6.0"
+  version: "0.7.0"
   maintained_by: "Claude Code Skill Evaluation project"
 ---
 
@@ -87,7 +87,7 @@ only surface once a model actually reads the skill. See Workflow.
    to spend a model call on 1b for a skill that was already going to fail
    1a.
 
-> Steps 2-4 are stubs — filled in by later work:
+> Step 2 is a stub — filled in by later work:
 > 2. Determine the model list for this run (`references/models_config.yaml`'s
 >    `default_models`, plus any models the user asked to add for this run
 >    only — see Decision Guidelines). Run the target skill against a fixed
@@ -96,7 +96,30 @@ only surface once a model actually reads the skill. See Workflow.
 >    model in that list, capturing model/time per run for real and token
 >    count as a labeled estimate — see `references/token-capture.md` for
 >    why it's an estimate, not a measurement, and how it's computed.
-> 3. Write a short qualitative judgment per run.
+
+3. **Write a judgment for each run.** For each model's run from step 2,
+   read that run's transcript/output and write 2-4 short bullet points —
+   concrete, verifiable observations, not a score. Cover things like: what
+   it got right, what it missed, anything notable about how it used tools
+   or followed the task. No pass/fail verdict, no numeric rating, no
+   overall summary sentence trying to compress the bullets into one
+   judgment — the bullets *are* the judgment.
+
+   Worked example — a hypothetical run of a CSV-cleanup skill against a
+   file with a missing header row:
+   - Correctly detected the missing header and inferred column names from
+     the first data row instead of erroring out.
+   - Used the `Bash` tool to run the provided `validate.sh` script before
+     writing output, as the skill's instructions require.
+   - Left two fully-blank rows in the output instead of stripping them,
+     even though the skill's `SKILL.md` says to remove blank rows.
+
+   Each bullet there names a specific, checkable thing about *this* run —
+   contrast with vague filler like "handled the task well" or "followed
+   instructions," which could describe any run and tells the reader
+   nothing they could verify against the transcript.
+
+> Step 4 is a stub — filled in by later work:
 > 4. Render the results as one table: Model Used | Number of Tokens | Time
 >    Spent | Claude's Judgment.
 
@@ -113,8 +136,15 @@ only surface once a model actually reads the skill. See Workflow.
   and catches most breakage; running the model-requiring qualitative stage
   first (or instead) wastes a model call on a skill that was already
   going to fail the deterministic check.
-- Never collapse a run's judgment into a numeric score — report concrete,
-  verifiable observations instead.
+- **Never collapse a run's judgment into a numeric score.** Report
+  concrete, verifiable observations instead — see step 3.
+- **Every judgment bullet must reference something specific and
+  verifiable from that particular run** — "used the `Bash` tool correctly
+  to run the install script" or "missed the edge case where the input CSV
+  has no header row," not generic filler like "handled the task well"
+  that could equally describe any run and gives the reader nothing to
+  check against the transcript. If a bullet would read the same for a
+  different run on a different skill, rewrite it or drop it.
 
 # Decision Guidelines
 
