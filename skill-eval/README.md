@@ -15,20 +15,23 @@ model.
 
 ## Status
 
-Building out in the order tracked by this repo's open `skill-eval:`-prefixed
-issues. So far:
+All four Workflow steps are implemented: gate-check (deterministic +
+qualitative), run the target skill per model, write a judgment, render the
+table. See [`EXAMPLE-RESULTS.md`](EXAMPLE-RESULTS.md) for a real,
+end-to-end run against `skill-review` itself — not a synthetic example.
 
-1. **Done.** Run `skill-review` against the target skill first — its
-   deterministic gate mode, then (if that passes) its qualitative full
-   review mode too — and stop on any blocking result from either. No
-   point measuring the cost of a skill that wouldn't even ship, or that
-   has a blocking problem only a model reading it would catch.
-2. **In progress.** Run the target skill against a fixed task-fixture set,
-   once per model in a configurable model list (see "Models configuration"
-   below), capturing model/tokens/time per run.
-3. Write a short qualitative judgment per run (not a numeric score).
-4. Render one table: `Model Used | Number of Tokens | Time Spent | Claude's
-   Judgment`.
+One thing worth knowing before relying on the "Number of Tokens" column:
+that demo found the token-count design in
+[`references/token-capture.md`](references/token-capture.md) is more
+pessimistic than it needs to be for at least some execution paths — see
+that file's note and `EXAMPLE-RESULTS.md` for the details. Treat the
+token column as directionally useful, and check which of the two
+mechanisms (measured vs. estimated) actually produced a given number,
+until that gets fully resolved.
+
+Remaining work is tracked by this repo's open `skill-eval:`-prefixed
+issues (docs, further regression coverage, etc.) — see
+[`CHANGELOG.md`](CHANGELOG.md) for what's landed so far.
 
 ## Models configuration
 
@@ -56,20 +59,44 @@ keeps `skill-review`'s scope narrow and its gate mode's guarantees
 (deterministic, no model call) intact, while `skill-eval` reuses that gate
 mode as its own first step rather than re-implementing static checks.
 
+## Local testing
+
+```bash
+pip install -r requirements.txt
+python3 tests/run_regression.py
+```
+
+Covers what's actually deterministic/scriptable: the gate-check signal
+`structural_check.py` produces for a known-Blocker fixture and a clean
+one, `models_config.yaml`'s shape, `render_report.py`'s table rendering
+(including pipe-escaping and the zero-runs case), a self-check, and
+packaging. Deliberately excludes anything requiring a live model call
+(task execution, judgment-writing, `skill-review`'s own qualitative full
+review mode) — same reasoning `skill-review`'s own suite uses.
+`.github/workflows/tests.yml` runs this same command on every push and PR.
+
 ## Repository layout
 
 ```
 skill-eval/
-├── SKILL.md           # Model-facing instructions (required)
-├── README.md           # This file — human/dev-facing
-├── CHANGELOG.md         # Version history
-├── requirements.txt     # Python deps for scripts/ (once any exist)
+├── SKILL.md               # Model-facing instructions (required)
+├── README.md               # This file — human/dev-facing
+├── CHANGELOG.md             # Version history
+├── SURVEY.md                 # Existing eval/cost-tracking tools, adopt/adapt/reject
+├── EXAMPLE-RESULTS.md          # Real end-to-end run against skill-review
+├── requirements.txt             # Python deps (PyYAML)
 ├── .gitignore
-├── scripts/             # Empty for now
+├── scripts/
+│   └── render_report.py           # Workflow step 4: renders the final table
 ├── references/
-│   ├── models_config.yaml  # Editable default_models list (see above)
-│   ├── task-authoring.md   # tests/fixtures/tasks/<skill-name>.yaml format
-│   └── token-capture.md    # Why "Number of Tokens" is a labeled estimate
+│   ├── models_config.yaml          # Editable default_models list (see above)
+│   ├── task-authoring.md            # tests/fixtures/tasks/<skill-name>.yaml format
+│   └── token-capture.md              # Why "Number of Tokens" is (usually) an estimate
 └── tests/
-    └── fixtures/         # Empty for now — no task set written yet for any skill
+    ├── run_regression.py               # This skill's own regression suite
+    └── fixtures/
+        ├── render-report-sample.json      # Fixed input for render_report.py tests
+        ├── render-report-empty.json        # Zero-runs edge case
+        └── tasks/
+            └── skill-review.yaml             # The one real task set authored so far
 ```

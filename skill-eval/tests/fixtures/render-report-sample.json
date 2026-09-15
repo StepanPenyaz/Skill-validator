@@ -1,0 +1,19 @@
+{
+  "skill_name": "sample-skill",
+  "gate_check": {
+    "stage_1a": {"structural_warnings_count": 1},
+    "stage_1b": {"overall_verdict": "pass_with_suggestions"}
+  },
+  "runs": [
+    {
+      "model": "sonnet",
+      "tokens": 1234,
+      "tokens_estimated": true,
+      "time_seconds": 12.5,
+      "judgment": [
+        "First bullet, a concrete observation.",
+        "Second bullet with a | pipe character to check escaping."
+      ]
+    }
+  ]
+}
