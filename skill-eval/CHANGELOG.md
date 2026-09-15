@@ -4,6 +4,18 @@ All notable changes to the `skill-eval` skill are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 versioning follows [SemVer](https://semver.org/).
 
+## [0.7.0] — 2026-09-20
+
+### Added
+- Workflow step 3 (judgment): for each model's run, read its transcript/
+  output and write 2-4 short bullet points — concrete, verifiable
+  observations, not a score, not an overall summary sentence. Includes a
+  worked example (a hypothetical CSV-cleanup run) so the instruction
+  isn't left abstract.
+- A Rules entry requiring every judgment bullet to name something
+  specific and checkable from that particular run, not generic filler
+  that could describe any run on any skill.
+
 ## [0.6.0] — 2026-09-20
 
 ### Added
