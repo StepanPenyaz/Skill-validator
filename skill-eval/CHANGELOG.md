@@ -4,6 +4,21 @@ All notable changes to the `skill-eval` skill are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 versioning follows [SemVer](https://semver.org/).
 
+## [0.6.0] — 2026-09-20
+
+### Added
+- `tests/fixtures/tasks/skill-review.yaml`: the first real task set,
+  following `references/task-authoring.md`'s format, targeting
+  `skill-review` itself — 3 tasks: a happy-path "what's wrong with my
+  skill" request against `bad-skill` (substantive findings to judge, not
+  a no-op); a task specifically targeting the 1.6.0 cost-conditional
+  security-scan gate against `good-skill` (should report
+  `metrics.security_scan.skipped: true`, so a future regression in that
+  gate shows up as a changed judgment/cost); and a "When NOT to Use"
+  boundary case checking `skill-review` correctly declines a runtime
+  task-success-rate question rather than over-triggering into a claim it
+  can't back up. This is the fixture the end-to-end demo (#27) will run.
+
 ## [0.5.0] — 2026-09-20
 
 ### Added

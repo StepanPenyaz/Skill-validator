@@ -1,0 +1,44 @@
+# Task fixture for skill-eval's Workflow step 2, targeting skill-review.
+# Format and authoring methodology: ../../../references/task-authoring.md
+#
+# This is the fixture the end-to-end demo (skill-eval issue #27) runs
+# against skill-review. Kept frozen once used in a real comparison - the
+# task set is the constant, the skill-review directory being evaluated is
+# the variable.
+
+tasks:
+  - id: happy-path-whats-wrong-with-bad-skill
+    prompt: >
+      What's wrong with the skill at skill-review/tests/fixtures/bad-skill?
+    source: >
+      SKILL.md description example - the description's trigger list
+      includes "what's wrong with my skill" verbatim. bad-skill (not
+      good-skill) is the target so the run produces substantive findings
+      to judge, not a "nothing to report" no-op.
+
+  - id: targets-1.6.0-cost-conditional-gate
+    prompt: >
+      Give me a quick gate-mode check of
+      skill-review/tests/fixtures/good-skill - I want to know whether the
+      security scan actually ran or got skipped, and why.
+    source: >
+      CHANGELOG 1.6.0: cost-conditional security scanning skips the
+      dangerous-shell-pattern/prompt-injection/undeclared-host scans by
+      default for a skill with no declared/referenced shell or network
+      tool. good-skill has none, so this should report
+      metrics.security_scan.skipped: true with a stated reason - a future
+      change that silently breaks this gate would show up here as a
+      changed judgment or a changed token/time cost for a case that used
+      to be cheap.
+
+  - id: boundary-runtime-task-success
+    prompt: >
+      Does skill-review tell me whether a skill actually performs well
+      when people use it in practice, or only whether it's written well?
+    source: >
+      When NOT to Use - skill-review's own SKILL.md explicitly redirects
+      "whether a skill performs well in actual use (triggering accuracy
+      in practice, task success rate)" to the skill-creator skill instead
+      of trying to answer it from a static read. This checks skill-review
+      correctly declines/hands off rather than over-triggering into a
+      runtime claim it can't actually back up.
