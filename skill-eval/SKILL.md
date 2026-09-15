@@ -21,11 +21,14 @@ pass/fail verdict or a rating) sitting next to the run's cost in the same
 table row — the comparison is made by reading the row, not by a computed
 ratio.
 
-`skill-eval` runs `skill-review`'s gate mode against the target skill
-before doing anything else, and refuses to proceed if that comes back with
-a breaking (Blocker-severity) error — there is no point measuring the
-runtime cost of a skill that would fail to parse or ship in the first
-place. See Workflow.
+`skill-eval` runs `skill-review` against the target skill before doing
+anything else — both its deterministic gate mode and, if that passes, its
+qualitative full review mode too — and refuses to proceed if either comes
+back blocked. There is no point measuring the runtime cost of a skill that
+would fail to parse or ship, and a hard compliance error isn't the only
+way a skill can be broken: some blocking problems (a safety-relevant
+pattern that's an actual problem in context, not just a regex candidate)
+only surface once a model actually reads the skill. See Workflow.
 
 # When to Use
 
@@ -49,23 +52,40 @@ place. See Workflow.
 
 # Workflow
 
-1. **Run the gate check.** Before doing anything else, run `skill-review`'s
-   gate mode against the target skill directory:
+1. **Run the gate check — two stages, cheapest first.** Before doing
+   anything else, run `skill-review` against the target skill directory,
+   in this order, stopping at the first stage that fails:
 
-   ```bash
-   python3 ../skill-review/scripts/structural_check.py <target-skill-directory>
-   ```
+   1a. **Deterministic stage.** Run `skill-review`'s gate mode:
 
-   This is deterministic and makes no model call. Then:
-   - If `compliance_errors` is non-empty (any Blocker-severity finding —
-     malformed frontmatter, a hardcoded secret, etc.) → **stop
-     immediately**. Report the gate failure to the user, quoting the
-     `compliance_errors` entries verbatim, and do not proceed to running
-     the target skill at all.
-   - If `compliance_errors` is empty → continue to step 2.
-     `structural_warnings` (Warning/Info-severity findings) are **not**
-     blocking — see Decision Guidelines for what to do with them instead
-     of silently dropping them.
+       ```bash
+       python3 ../skill-review/scripts/structural_check.py <target-skill-directory>
+       ```
+
+       No model call. If `compliance_errors` is non-empty (any
+       Blocker-severity finding — malformed frontmatter, a hardcoded
+       secret, etc.) → **stop immediately**. Report the gate failure to
+       the user, quoting the `compliance_errors` entries verbatim, and do
+       not proceed to stage 1b or to running the target skill at all. If
+       empty → continue to stage 1b. `structural_warnings`
+       (Warning/Info-severity findings) are **not** blocking — see
+       Decision Guidelines for what to do with them instead of silently
+       dropping them.
+
+   1b. **Qualitative stage.** Run `skill-review`'s full review mode
+       (`skill-review/SKILL.md` Workflow steps 1-5 — this one does need a
+       model, since it's the pass that judges things a regex can't, like
+       whether a safety-relevant pattern is an actual problem in context)
+       against the same target skill directory. If the resulting
+       `overall_verdict` is `blocked` (any `category_scores` entry is
+       `blocker`) → **stop immediately**. Report which category was
+       blocked and why, and do not proceed to running the target skill.
+       If not blocked → continue to step 2.
+
+   Run 1a before 1b, not the other way around or both at once: 1a is
+   free (no model call) and catches most breakage, so there's no reason
+   to spend a model call on 1b for a skill that was already going to fail
+   1a.
 
 > Steps 2-4 are stubs — filled in by later work:
 > 2. Run the target skill against a fixed task-fixture set, once per model
@@ -79,29 +99,45 @@ place. See Workflow.
 
 # Rules
 
-- **Never proceed past a failed gate check.** If Workflow step 1's
-  `compliance_errors` is non-empty, stop there — report the failure and do
+- **Never proceed past a failed gate check, at either stage.** If Workflow
+  step 1a's `compliance_errors` is non-empty, or step 1b's
+  `overall_verdict` is `blocked`, stop there — report the failure and do
   not run the target skill. This is not optional or a judgment call: a
-  skill with a Blocker-severity finding shouldn't be run to measure its
-  cost or behavior, regardless of how the user phrased the request.
+  skill with a Blocker-level finding, deterministic or qualitative,
+  shouldn't be run to measure its cost or behavior, regardless of how the
+  user phrased the request.
+- **Never skip straight to 1b, and never run it before 1a.** 1a is free
+  and catches most breakage; running the model-requiring qualitative stage
+  first (or instead) wastes a model call on a skill that was already
+  going to fail the deterministic check.
 - Never collapse a run's judgment into a numeric score — report concrete,
   verifiable observations instead.
 
 # Decision Guidelines
 
-- **`structural_warnings` from the gate check are not blocking — proceed,
-  but don't drop them.** A skill can have Warning/Info-severity findings
-  (an orphaned resource file, a missing `metadata.version`, a dangerous-
-  shell-pattern candidate) and still be safe to run. Continue to step 2,
-  but carry the warning count forward and surface it alongside the final
+- **`structural_warnings` from stage 1a are not blocking — proceed, but
+  don't drop them.** A skill can have Warning/Info-severity findings (an
+  orphaned resource file, a missing `metadata.version`, a dangerous-
+  shell-pattern candidate) and still be safe to run. Continue past 1a, but
+  carry the warning count forward and surface it alongside the final
   report — e.g. a short "Gate check: N structural warning(s), not
   blocking" note near the results table — so the user can see the target
   skill wasn't perfectly clean even though evaluation proceeded, instead
-  of that information silently disappearing after step 1.
+  of that information silently disappearing after stage 1a.
+- **A non-`blocked` verdict from stage 1b gets the same treatment.** If
+  full review mode comes back `needs_work` or `pass_with_suggestions`
+  (not `blocked`), proceed — but surface `overall_verdict` and the
+  category scores alongside the final report too, the same way stage 1a's
+  warnings are. A skill can be worth evaluating for cost/behavior while
+  still having writing-quality issues; don't let that context disappear
+  once stage 1b passes.
 - More to come as later Workflow steps are filled in.
 
 # References
 
+- `../skill-review/references/schema.md` — the `overall_verdict`/
+  `category_scores` shape Workflow step 1b's full review mode produces;
+  needed to know what "blocked" actually means there.
 - `references/token-capture.md` — why the "Number of Tokens" column is a
   labeled estimate, not a measurement, in this environment, and how the
   estimate is computed. See Workflow step 2.
