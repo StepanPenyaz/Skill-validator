@@ -4,6 +4,30 @@ All notable changes to the `skill-eval` skill are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 versioning follows [SemVer](https://semver.org/).
 
+## [0.11.0] — 2026-09-20
+
+### Added
+- `tests/run_regression.py` (new file): `skill-eval`'s own regression
+  suite, following `skill-review/tests/run_regression.py`'s pattern
+  exactly (plain assertions over subprocess calls to real CLI
+  entrypoints, no test framework). 7 checks: the gate-check signal
+  `structural_check.py` produces for `bad-skill` (compliance_errors
+  non-empty) and `clean-skill-with-tricky-patterns` (empty);
+  `models_config.yaml`'s shape and default content; `render_report.py`'s
+  table rendering against a fixed sample input (`tests/fixtures/
+  render-report-sample.json`), including pipe-character escaping and the
+  gate-check note; the zero-runs edge case
+  (`render-report-empty.json`); a self-check (`skill-eval` itself passes
+  `skill-review`'s gate mode); and packaging. Explicitly excludes
+  anything requiring a live model call.
+- `.github/workflows/tests.yml`: new `skill-eval` job (sibling to the
+  `skill-review` job) running this suite on every push and PR.
+- Refreshed `README.md`'s "Status" section (was still describing step 2
+  as "in progress" after #38 already landed it) and added a "Local
+  testing" section; updated the repository layout tree to match what
+  actually exists now (`scripts/render_report.py`, `SURVEY.md`,
+  `EXAMPLE-RESULTS.md`, the new `tests/` contents).
+
 ## [0.10.0] — 2026-09-20
 
 ### Added

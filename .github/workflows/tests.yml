@@ -33,3 +33,26 @@ jobs:
       # too, not just a local `git push` surprise.
       - name: Verify skill-review still packages cleanly
         run: python3 scripts/package_skill.py skill-review /tmp/dist
+
+  skill-eval:
+    name: skill-eval regression suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r skill-eval/requirements.txt
+
+      # skill-eval/tests/run_regression.py covers what's actually
+      # deterministic/scriptable: the gate-check signal it reads from
+      # skill-review's own structural_check.py, models_config.yaml's
+      # shape, scripts/render_report.py's table rendering, a self-check,
+      # and packaging — not anything requiring a live model call (task
+      # execution, judgment-writing, skill-review's qualitative full
+      # review mode), same reasoning skill-review's own suite uses.
+      - name: Run skill-eval's regression suite
+        run: python3 skill-eval/tests/run_regression.py
