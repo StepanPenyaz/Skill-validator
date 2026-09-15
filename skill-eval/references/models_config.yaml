@@ -1,0 +1,10 @@
+# Default model list for skill-eval's Workflow step 2 (run the target
+# skill per model). Editing this list changes the default for every
+# future skill-eval run - no code change needed, same pattern as
+# skill-review's references/severity_config.yaml.
+#
+# To compare more models for a single run without changing the persistent
+# default, ask for them at invocation time instead (e.g. "also test this
+# on haiku and opus") - see SKILL.md's Decision Guidelines.
+default_models:
+  - sonnet
