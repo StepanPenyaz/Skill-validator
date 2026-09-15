@@ -4,6 +4,19 @@ All notable changes to the `skill-eval` skill are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 versioning follows [SemVer](https://semver.org/).
 
+## [0.4.0] — 2026-09-20
+
+### Added
+- `references/task-authoring.md`: defines the `tests/fixtures/tasks/
+  <skill-name>.yaml` format (`id`/`prompt`/`source` per task) and the
+  authoring methodology — pull a happy-path prompt from the target
+  skill's own description, at least one task targeting whatever a
+  version's `CHANGELOG.md` entry actually changed, one "When NOT to Use"
+  boundary case, 3-5 tasks as a starting guideline. Authoring is a manual
+  step for now, matching how `skill-review`'s `bad-skill` fixture was
+  hand-authored. No task set written yet for any specific skill — that's
+  the next step, now that the format is settled.
+
 ## [0.3.0] — 2026-09-20
 
 ### Added
