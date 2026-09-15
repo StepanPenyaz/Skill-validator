@@ -4,6 +4,25 @@ All notable changes to the `skill-eval` skill are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 versioning follows [SemVer](https://semver.org/).
 
+## [0.8.0] — 2026-09-20
+
+### Added
+- `scripts/render_report.py` (new file): renders the final Markdown
+  report from already-collected run data — purely mechanical, no model
+  call, same role `skill-review/scripts/generate_static_report.py` plays
+  there. Takes a JSON input (`skill_name`, `gate_check` stage results,
+  `runs[]` with `model`/`tokens`/`tokens_estimated`/`time_seconds`/
+  `judgment`) and renders one table (`Model Used | Number of Tokens |
+  Time Spent | Claude's Judgment`) led by a gate-check note that's always
+  shown, even on a pass, so the report is self-contained. Escapes `|`/
+  newlines in judgment text so a bullet can't break the table.
+- Workflow step 4 (render the report), replacing its stub-list entry:
+  assemble the collected data, run `render_report.py`, and save as
+  `<skill-name>-eval.md` — mirroring `skill-review`'s
+  `<skill-name>-review.md` convention exactly, including the
+  `/mnt/user-data/outputs/`-if-present, next-to-the-skill-directory-
+  otherwise save location.
+
 ## [0.7.0] — 2026-09-20
 
 ### Added
