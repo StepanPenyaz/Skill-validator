@@ -4,6 +4,19 @@ All notable changes to the `skill-eval` skill are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 versioning follows [SemVer](https://semver.org/).
 
+## [0.5.0] — 2026-09-20
+
+### Added
+- `references/models_config.yaml`: editable `default_models` list (just
+  `sonnet` out of the box) for Workflow step 2, following the same
+  externalized-policy pattern as `skill-review`'s
+  `references/severity_config.yaml`. Documented, in both `SKILL.md`
+  (Decision Guidelines) and `README.md`, the two ways to extend it for a
+  model comparison: persistently (edit the file) or one-off (ask for
+  extra models at invocation time, for that run only).
+- `README.md`'s "Status" section now reflects that Workflow step 1 (both
+  gate-check stages) is actually done, not still a stub.
+
 ## [0.4.0] — 2026-09-20
 
 ### Added

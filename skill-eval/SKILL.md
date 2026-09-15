@@ -2,7 +2,7 @@
 name: skill-eval
 description: Runs a Claude Agent Skill against real tasks and reports what it actually cost to do so — model used, token count, wall-clock time, and a short qualitative judgment of how the run went. Use this whenever the user asks to evaluate a skill's runtime cost, compare how a skill performs across models, measure a skill's token/time cost, or wants to know whether a new version of a skill is worth its cost relative to the old one. Not for asking whether a SKILL.md is well-written — that's skill-review.
 metadata:
-  version: "0.4.0"
+  version: "0.5.0"
   maintained_by: "Claude Code Skill Evaluation project"
 ---
 
@@ -88,12 +88,14 @@ only surface once a model actually reads the skill. See Workflow.
    1a.
 
 > Steps 2-4 are stubs — filled in by later work:
-> 2. Run the target skill against a fixed task-fixture set from
->    `tests/fixtures/tasks/<skill-name>.yaml` (format and authoring
->    methodology: `references/task-authoring.md`), once per model in the
->    configured model list, capturing model/time per run for real and
->    token count as a labeled estimate — see `references/token-capture.md`
->    for why it's an estimate, not a measurement, and how it's computed.
+> 2. Determine the model list for this run (`references/models_config.yaml`'s
+>    `default_models`, plus any models the user asked to add for this run
+>    only — see Decision Guidelines). Run the target skill against a fixed
+>    task-fixture set from `tests/fixtures/tasks/<skill-name>.yaml` (format
+>    and authoring methodology: `references/task-authoring.md`), once per
+>    model in that list, capturing model/time per run for real and token
+>    count as a labeled estimate — see `references/token-capture.md` for
+>    why it's an estimate, not a measurement, and how it's computed.
 > 3. Write a short qualitative judgment per run.
 > 4. Render the results as one table: Model Used | Number of Tokens | Time
 >    Spent | Claude's Judgment.
@@ -132,6 +134,20 @@ only surface once a model actually reads the skill. See Workflow.
   warnings are. A skill can be worth evaluating for cost/behavior while
   still having writing-quality issues; don't let that context disappear
   once stage 1b passes.
+- **Extending the model list for a comparison.** Step 2's model list
+  starts from `references/models_config.yaml`'s `default_models` (just
+  `sonnet` out of the box). Two ways to add more, both valid, use the one
+  that fits the request:
+  - Persistent: edit `default_models` in that file — affects every future
+    run, not just this one. Do this when the user wants a standing change
+    ("always compare against haiku from now on").
+  - One-off: if the user asks at invocation time for extra models for
+    *this* run only (e.g. "also test this on haiku and opus"), add them
+    to the list used for this run without editing the file.
+  Either way, step 2 spawns one `Agent`-tool subagent per model in the
+  resulting list, each given the same task prompt and the same target
+  skill — the model list is the only thing that varies between rows of
+  the final table.
 - More to come as later Workflow steps are filled in.
 
 # References
@@ -139,6 +155,8 @@ only surface once a model actually reads the skill. See Workflow.
 - `../skill-review/references/schema.md` — the `overall_verdict`/
   `category_scores` shape Workflow step 1b's full review mode produces;
   needed to know what "blocked" actually means there.
+- `references/models_config.yaml` — the editable `default_models` list;
+  see Decision Guidelines for how to extend it, persistently or per-run.
 - `references/task-authoring.md` — the `tests/fixtures/tasks/<skill-name>.yaml`
   format and how to write one. See Workflow step 2.
 - `references/token-capture.md` — why the "Number of Tokens" column is a
@@ -146,5 +164,3 @@ only surface once a model actually reads the skill. See Workflow.
   estimate is computed. See Workflow step 2.
 - `../SURVEY.md` — survey of existing eval/cost-tracking tools and why
   `skill-eval` is mostly custom-built rather than adopting one wholesale.
-- More to come as `references/` files are added (models configuration,
-  etc.).
