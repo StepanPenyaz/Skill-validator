@@ -13,7 +13,7 @@ A repo of Claude Agent Skills, packaged and validated with shared tooling.
 ├── scripts/
 │   └── package_skill.py    # Shared packager for every skill below
 ├── skill-review/           # Statically reviews other skills for compliance/quality
-└── <future-skill>/
+└── skill-eval/              # Runs another skill against real tasks and reports its cost
 ```
 
 Each skill is a top-level directory containing its own `SKILL.md`. Dev-only
@@ -53,6 +53,34 @@ Its own regression suite (`skill-review/tests/run_regression.py`) runs
 every fixture under `skill-review/tests/fixtures/` and asserts the result
 matches what's documented — this is what `.github/workflows/tests.yml`
 runs on every push and PR.
+
+## skill-eval
+
+Runs *another* skill against real tasks and reports what it actually
+cost — model used, token count, wall-clock time — alongside a short
+qualitative judgment of how the run went. Where `skill-review` asks "is
+this skill well-written?" without executing anything, `skill-eval` asks
+"does this skill do its job well, at what cost?" by actually running it.
+It runs `skill-review` against the target skill first and refuses to
+proceed if that comes back blocked.
+
+```
+Evaluate skill-review's runtime cost and behavior.
+```
+
+— asked in a Claude session with `skill-eval` available, pointing at a
+target skill's directory (and, optionally, which models to compare). See
+[`skill-eval/EXAMPLE-RESULTS.md`](skill-eval/EXAMPLE-RESULTS.md) for a
+real run's output, and [`skill-eval/README.md`](skill-eval/README.md) for
+the full picture — how to add a task fixture for a new target skill, what
+has to stay constant for two runs' numbers to be comparable, and a survey
+of existing eval/cost-tracking tools (`skill-eval/SURVEY.md`) explaining
+why this is mostly custom-built rather than adopting one of them
+wholesale.
+
+Its own regression suite (`skill-eval/tests/run_regression.py`) covers
+what's actually deterministic/scriptable — same convention as
+`skill-review`'s — and also runs on every push and PR.
 
 ## Adding a new skill
 

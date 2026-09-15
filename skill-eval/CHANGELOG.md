@@ -4,6 +4,22 @@ All notable changes to the `skill-eval` skill are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 versioning follows [SemVer](https://semver.org/).
 
+## [0.12.0] — 2026-09-20
+
+### Added
+- `README.md`: three new sections closing the remaining doc gaps —
+  "Running it end-to-end" (there's no CLI entrypoint for the full run;
+  ask a Claude session with `skill-eval` available, with two worked
+  invocation examples), "Adding a task fixture for a new skill" (a short
+  pointer version of `references/task-authoring.md`'s methodology), and
+  "Reproducibility: what must stay constant" (the task fixture, the
+  model list, and which `skill-review` version ran the gate check all
+  have to match for two runs to be comparable — plus judge variance as
+  an acknowledged, uncontrolled-for limitation).
+- Root `README.md`: replaced the `<future-skill>/` placeholder in the
+  Layout tree with the real `skill-eval/` entry, and added a `##
+  skill-eval` section mirroring the existing `## skill-review` section.
+
 ## [0.11.0] — 2026-09-20
 
 ### Added
