@@ -2,7 +2,7 @@
 name: skill-eval
 description: Runs a Claude Agent Skill against real tasks and reports what it actually cost to do so — model used, token count, wall-clock time, and a short qualitative judgment of how the run went. Use this whenever the user asks to evaluate a skill's runtime cost, compare how a skill performs across models, measure a skill's token/time cost, or wants to know whether a new version of a skill is worth its cost relative to the old one. Not for asking whether a SKILL.md is well-written — that's skill-review.
 metadata:
-  version: "0.7.0"
+  version: "0.8.0"
   maintained_by: "Claude Code Skill Evaluation project"
 ---
 
@@ -119,9 +119,36 @@ only surface once a model actually reads the skill. See Workflow.
    instructions," which could describe any run and tells the reader
    nothing they could verify against the transcript.
 
-> Step 4 is a stub — filled in by later work:
-> 4. Render the results as one table: Model Used | Number of Tokens | Time
->    Spent | Claude's Judgment.
+4. **Render the report.** By this point steps 1-3 have already collected
+   everything needed — the gate-check result, and each run's model,
+   token count, elapsed time, and judgment bullets. Rendering that into
+   the final table is purely mechanical, so it's a script, not another
+   judgment call:
+
+   - Assemble the collected data into the JSON shape
+     `scripts/render_report.py`'s module docstring documents (`skill_name`,
+     `gate_check.stage_1a.structural_warnings_count`,
+     `gate_check.stage_1b.overall_verdict`, and `runs[]` with
+     `model`/`tokens`/`tokens_estimated`/`time_seconds`/`judgment`), write
+     it to a temp file, and run:
+
+     ```bash
+     python3 scripts/render_report.py <input.json> --out <skill-name>-eval.md
+     ```
+
+   - The rendered report leads with the gate-check result — both stages,
+     even though both necessarily passed to get this far — so the report
+     is self-contained and doesn't require re-running gate mode to know
+     it happened (see Decision Guidelines on why that context shouldn't
+     silently disappear). Then one Markdown table, one row per model:
+     `Model Used | Number of Tokens | Time Spent | Claude's Judgment`,
+     judgment bullets rendered as a `<br>`-separated list within the
+     cell.
+   - Save the file as `<skill-name>-eval.md` — mirroring `skill-review`'s
+     `<skill-name>-review.md` convention exactly, including where it's
+     saved: to `/mnt/user-data/outputs/` when that convention exists in
+     the current environment, otherwise next to the target skill
+     directory with the path given to the user directly.
 
 # Rules
 
@@ -192,5 +219,8 @@ only surface once a model actually reads the skill. See Workflow.
 - `references/token-capture.md` — why the "Number of Tokens" column is a
   labeled estimate, not a measurement, in this environment, and how the
   estimate is computed. See Workflow step 2.
+- `scripts/render_report.py` — run in Workflow step 4 to render the final
+  Markdown report; purely mechanical, no model call, same role
+  `skill-review/scripts/generate_static_report.py` plays there.
 - `../SURVEY.md` — survey of existing eval/cost-tracking tools and why
   `skill-eval` is mostly custom-built rather than adopting one wholesale.
