@@ -2,7 +2,7 @@
 name: skill-eval
 description: Runs a Claude Agent Skill against real tasks and reports what it actually cost to do so — model used, token count, wall-clock time, and a short qualitative judgment of how the run went. Use this whenever the user asks to evaluate a skill's runtime cost, compare how a skill performs across models, measure a skill's token/time cost, or wants to know whether a new version of a skill is worth its cost relative to the old one. Not for asking whether a SKILL.md is well-written — that's skill-review.
 metadata:
-  version: "0.8.0"
+  version: "0.9.0"
   maintained_by: "Claude Code Skill Evaluation project"
 ---
 
@@ -87,15 +87,50 @@ only surface once a model actually reads the skill. See Workflow.
    to spend a model call on 1b for a skill that was already going to fail
    1a.
 
-> Step 2 is a stub — filled in by later work:
-> 2. Determine the model list for this run (`references/models_config.yaml`'s
->    `default_models`, plus any models the user asked to add for this run
->    only — see Decision Guidelines). Run the target skill against a fixed
->    task-fixture set from `tests/fixtures/tasks/<skill-name>.yaml` (format
->    and authoring methodology: `references/task-authoring.md`), once per
->    model in that list, capturing model/time per run for real and token
->    count as a labeled estimate — see `references/token-capture.md` for
->    why it's an estimate, not a measurement, and how it's computed.
+2. **Run the target skill, once per model.** Do this after step 1 passes,
+   never before.
+
+   - **Determine the model list**: `references/models_config.yaml`'s
+     `default_models`, plus any models the user asked to add for this run
+     only — see Decision Guidelines.
+   - **Load the task fixture**: `tests/fixtures/tasks/<skill-name>.yaml`
+     (format: `references/task-authoring.md`). If it doesn't exist yet for
+     this target skill, that's a stop condition too — see Decision
+     Guidelines, don't invent tasks on the fly instead.
+   - **For each model in the list, spawn one `Agent`-tool subagent**
+     (`model` parameter set to that model) covering *all* tasks from the
+     fixture in a single conversation — not one subagent per task. This
+     is what makes "one row per model" in the final table meaningful: the
+     row reflects the cost of evaluating the whole task set on that
+     model, not just one task, and step 3 reads one coherent transcript
+     per model instead of stitching several together.
+   - **The subagent's prompt must give it everything it needs to actually
+     act as the target skill**, since a target skill sitting in this repo
+     isn't necessarily auto-loaded/triggered for a fresh subagent the way
+     an installed skill would be. Tell it explicitly: read
+     `<target-skill-directory>/SKILL.md` (and any bundled `scripts/`/
+     `references/` it points to) and follow its instructions to complete
+     each task below, in order, using its own tools as needed — then list
+     the task prompts from the fixture, each labeled with its `id`.
+   - **The subagent's prompt must also ask it to self-report its token
+     usage**, since nothing in this environment can retrieve that after
+     the fact (see `references/token-capture.md`). Instruct it: as the
+     last line of your final report, on its own line, write `Approx.
+     tokens used: ~N (estimated)`, where `N` is (everything you were
+     given in this prompt, in characters, plus your full final report, in
+     characters) ÷ 4 — a standard characters-per-token rule of thumb.
+   - **Capture wall-clock time yourself**, around the `Agent` call — start
+     a timestamp immediately before spawning it, stop immediately after
+     it returns. Don't rely on the subagent to report its own elapsed
+     time; it has no reliable way to know that either.
+   - **Parse the token estimate back out of the subagent's final report**
+     (the `Approx. tokens used: ~N` line) rather than asking for it as
+     structured output — the subagent's own final report *is* what step 3
+     reads as the run's transcript, so keep it as one coherent piece of
+     text for that step to work with, not a report plus a separate
+     side-channel value.
+   - Continue to step 3 once every model in the list has a captured
+     `{model, tokens (estimated), time_seconds, transcript}`.
 
 3. **Write a judgment for each run.** For each model's run from step 2,
    read that run's transcript/output and write 2-4 short bullet points —
@@ -163,6 +198,17 @@ only surface once a model actually reads the skill. See Workflow.
   and catches most breakage; running the model-requiring qualitative stage
   first (or instead) wastes a model call on a skill that was already
   going to fail the deterministic check.
+- **Never invent tasks on the fly.** If `tests/fixtures/tasks/<skill-name>.yaml`
+  doesn't exist yet for the target skill, stop and tell the user a task
+  fixture needs to be authored first (`references/task-authoring.md`)
+  rather than improvising prompts — an improvised task set defeats the
+  whole point of a fixed fixture (see "why a fixed fixture" in that file):
+  it wouldn't be the same task set on a rerun or a version comparison.
+- **One subagent per model, covering every task — never one subagent per
+  task.** Splitting by task would produce several transcripts per model
+  instead of one, breaking step 3's "read that run's transcript" (singular)
+  and making "one row per model" in the final table misleading rather than
+  a real per-model cost.
 - **Never collapse a run's judgment into a numeric score.** Report
   concrete, verifiable observations instead — see step 3.
 - **Every judgment bullet must reference something specific and
@@ -202,10 +248,14 @@ only surface once a model actually reads the skill. See Workflow.
     *this* run only (e.g. "also test this on haiku and opus"), add them
     to the list used for this run without editing the file.
   Either way, step 2 spawns one `Agent`-tool subagent per model in the
-  resulting list, each given the same task prompt and the same target
-  skill — the model list is the only thing that varies between rows of
-  the final table.
-- More to come as later Workflow steps are filled in.
+  resulting list, each given the same task set and the same target skill
+  — the model list is the only thing that varies between rows of the
+  final table.
+- **No task fixture for this skill yet.** If
+  `tests/fixtures/tasks/<skill-name>.yaml` doesn't exist, don't guess at
+  tasks — tell the user, and offer to write one following
+  `references/task-authoring.md` (a manual/assisted step, per that file)
+  before continuing. Only proceed with the run once a real fixture exists.
 
 # References
 
