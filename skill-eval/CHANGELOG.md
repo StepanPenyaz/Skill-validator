@@ -20,14 +20,23 @@ versioning follows [SemVer](https://semver.org/).
 ## [0.3.0] — 2026-09-20
 
 ### Added
-- Workflow step 1 (gate check): runs `skill-review`'s gate mode against
-  the target skill directory before anything else and stops immediately
-  if `compliance_errors` is non-empty, reporting the failure verbatim
-  instead of proceeding.
-- A Rules entry making the stop condition non-optional, and a Decision
-  Guidelines entry covering `structural_warnings`: not blocking, but
-  carried forward and surfaced alongside the final report rather than
-  silently dropped.
+- Workflow step 1 (gate check), two stages, run in order, stopping at the
+  first that fails: 1a runs `skill-review`'s deterministic gate mode
+  (`structural_check.py`) and stops if `compliance_errors` is non-empty;
+  1b — only reached if 1a passes — runs `skill-review`'s qualitative full
+  review mode and stops if `overall_verdict` is `blocked`. Both are
+  needed: gate mode alone can't catch a blocking issue that only a model
+  reading the skill would recognize (e.g. a safety-relevant pattern that's
+  an actual problem in context, versus just a regex candidate). 1a runs
+  first since it's free (no model call) and catches most breakage, so
+  there's no reason to spend a model call on 1b for a skill that was
+  already going to fail 1a.
+- Rules entries making the stop condition non-optional at either stage,
+  and requiring 1a to run before 1b. Decision Guidelines entries covering
+  non-blocking-but-not-clean results from both stages
+  (`structural_warnings` from 1a; `needs_work`/`pass_with_suggestions`
+  from 1b): proceed, but carry them forward and surface them alongside the
+  final report rather than silently dropping them.
 
 ## [0.2.0] — 2026-09-20
 
