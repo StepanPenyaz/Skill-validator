@@ -4,6 +4,36 @@ All notable changes to the `skill-eval` skill are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 versioning follows [SemVer](https://semver.org/).
 
+## [0.10.0] — 2026-09-20
+
+### Added
+- `EXAMPLE-RESULTS.md`: the first real, end-to-end run of `skill-eval`'s
+  complete Workflow, targeting `skill-review` itself with
+  `tests/fixtures/tasks/skill-review.yaml`'s 3 tasks — not a synthetic
+  example. Gate check passed both stages (9 structural warnings, all
+  confirmed as the scanner's own self-referential false positives;
+  `overall_verdict: pass` on the qualitative review). One `sonnet` run
+  covering all three tasks: 89,012 tokens, 2m 3s, a 4-bullet judgment
+  grounded in specific things the subagent actually did (correctly
+  triaged gate-mode-only vs. full-review-mode per task, correctly
+  dismissed a known false positive, correctly exercised the 1.6.0
+  cost-conditional-scan mechanism, correctly declined an out-of-scope
+  boundary question).
+
+### Fixed (discovered while running the demo)
+- **`references/token-capture.md`'s conclusion was incomplete.** The
+  step-2 subagent, spawned through the top-level `Agent` tool directly,
+  returned real usage metadata (`subagent_tokens`, `duration_ms`)
+  alongside its final report — no self-reporting or estimation needed.
+  The original research spike (#23) checked whether a *separate*
+  introspection tool could retrieve a spawned subagent's usage after the
+  fact and correctly found no mechanism for that — but didn't check
+  whether the `Agent` tool's own result already carries it. Flagged
+  prominently in `EXAMPLE-RESULTS.md` rather than silently revising
+  Workflow step 2 here — confirming how far this generalizes (a
+  Workflow's `agent()` wrapper vs. a direct `Agent` tool call; every
+  invocation vs. this one) is its own follow-up.
+
 ## [0.9.0] — 2026-09-20
 
 ### Added
