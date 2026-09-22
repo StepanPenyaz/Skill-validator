@@ -1,0 +1,35 @@
+{
+  "skill_name": "csv-cleaner",
+  "reviewed_at": "2026-09-22T00:00:00Z",
+  "overall_verdict": "pass",
+  "category_scores": {
+    "compliance": "pass",
+    "structure_and_progressive_disclosure": "pass",
+    "description_and_triggering": "pass",
+    "writing_style_and_content": "pass",
+    "safety": "pass"
+  },
+  "metrics": {
+    "skill_md_body_line_count": 29,
+    "description_word_count": 68,
+    "resource_file_count": 3,
+    "resource_dir_file_counts": {"scripts": 1, "references": 2, "assets": 0},
+    "imperative_marker_counts": {"MUST": 0, "NEVER": 0, "ALWAYS": 0, "SHOULD": 0, "REQUIRED": 0, "DO NOT": 0},
+    "preferred_structure_sections": {
+      "present": ["Purpose", "Workflow", "References"],
+      "missing": ["When to Use", "When NOT to Use", "Rules", "Decision Guidelines", "Validation"]
+    },
+    "declared_tools": ["Bash"],
+    "tools_declared_but_unreferenced": ["Bash"],
+    "tools_referenced_but_undeclared": [],
+    "hardcoded_secret_candidates": [],
+    "dangerous_shell_pattern_candidates": [],
+    "prompt_injection_phrase_candidates": [],
+    "prohibited_action_phrase_candidates": [],
+    "undeclared_external_hosts": [],
+    "security_scan": {"skipped": false, "forced": false, "checks_skipped": [], "reason": null}
+  },
+  "findings": [],
+  "orphaned_resource_files_confirmed": [],
+  "summary": "csv-cleaner now passes clean. All five findings from the v1 review are resolved: the api.cleanmycsv.io call is named in the description, explained in the new Workflow step 3, and registered in references/external-calls.json with what data it sends and why (F1); the description is now 68 words with an explicit when-to-use cue and mentions both the overwrite behavior and the external call (F2); the script writes to <path>.cleaned.csv by default and only overwrites the original when the user explicitly asks via --in-place, removing the irreversible-by-default risk (F3); the orphaned references/legacy_notes.md was deleted since it documented an abandoned approach with no bearing on the current implementation (F4); and the overwrite/backup instruction is now two separate, clearly-worded Workflow steps (F5). The one remaining gate-mode candidate — 'Bash' declared but not referenced by name — was checked against the real body and dismissed as a false positive: the tool is genuinely needed to run both scripts/clean.py and curl, the check just can't see that from a literal name search."
+}
