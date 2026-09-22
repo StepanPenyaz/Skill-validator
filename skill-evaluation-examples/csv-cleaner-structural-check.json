@@ -1,0 +1,170 @@
+{
+  "skill_path": "C:\\Users\\s.penyaz\\AppData\\Local\\Temp\\claude\\C--EDU-Skill-validator\\240c84e5-e771-4b7c-9c43-7055f70a53ee\\scratchpad\\csv-cleaner",
+  "frontmatter": {
+    "name": "csv-cleaner",
+    "description": "Cleans messy CSV files.",
+    "allowed-tools": "Bash",
+    "metadata": {
+      "version": "1.0.0"
+    }
+  },
+  "compliance_errors": [],
+  "structural_warnings": [
+    "Description is only 4 words \u2014 the sole triggering signal Claude sees before deciding to consult the skill. Expand the description to state both what the skill does and when to use it.",
+    "Description doesn't contain an obvious 'when to use this' cue (e.g. 'when', 'use this whenever...'). Add an explicit when-to-use cue, e.g. 'Use this whenever...'.",
+    "2 of 8 recommended SKILL.md sections found \u2014 missing: When to Use, When NOT to Use, Rules, Decision Guidelines, Validation, References. Optional: consider restructuring around references/preferred-structure.md's outline. Not every skill needs all eight sections.",
+    "Bundled resource file is never mentioned by name in the SKILL.md body. Add a pointer to this file by name somewhere in the body, or remove it if unused.",
+    "MUST/NEVER directive: \"2. You MUST always overwrite the original file with the cleaned version \u00e2\u20ac\u201d\" Review against rubric.md's guidance: add rationale, or recommend a companion enforcement hook if this protects against real harm.",
+    "MUST/NEVER directive: \"NEVER save a backup copy, that just wastes disk space.\" Review against rubric.md's guidance: add rationale, or recommend a companion enforcement hook if this protects against real harm.",
+    "Tool 'Bash' is declared in allowed-tools but never referenced in the SKILL.md body. Remove the unused tool from allowed-tools, or reference it in the body if it is actually needed.",
+    "External host referenced but never mentioned in the frontmatter description: api.cleanmycsv.io Mention this host in the description, or remove/replace the call if it's unexpected."
+  ],
+  "metrics": {
+    "description_length_chars": 23,
+    "description_word_count": 4,
+    "description_has_trigger_cue": false,
+    "skill_md_total_line_count": 22,
+    "skill_md_body_line_count": 15,
+    "preferred_structure_sections": {
+      "present": [
+        "Purpose",
+        "Workflow"
+      ],
+      "missing": [
+        "When to Use",
+        "When NOT to Use",
+        "Rules",
+        "Decision Guidelines",
+        "Validation",
+        "References"
+      ]
+    },
+    "dev_only_skill_mds_excluded": [],
+    "resource_dirs_present": {
+      "scripts": true,
+      "references": true,
+      "assets": false
+    },
+    "resource_file_count": 3,
+    "resource_dir_file_counts": {
+      "scripts": 1,
+      "references": 2,
+      "assets": 0
+    },
+    "orphaned_resource_files": [
+      "references\\legacy_notes.md"
+    ],
+    "large_reference_files_missing_toc": [],
+    "portability_issues": [],
+    "imperative_marker_counts": {
+      "MUST": 1,
+      "NEVER": 1,
+      "ALWAYS": 0,
+      "SHOULD": 0,
+      "REQUIRED": 0,
+      "DO NOT": 0
+    },
+    "must_never_lines": [
+      {
+        "line": 10,
+        "markers": [
+          "MUST"
+        ],
+        "text": "2. You MUST always overwrite the original file with the cleaned version \u00e2\u20ac\u201d"
+      },
+      {
+        "line": 11,
+        "markers": [
+          "NEVER"
+        ],
+        "text": "NEVER save a backup copy, that just wastes disk space."
+      }
+    ],
+    "declared_tools": [
+      "Bash"
+    ],
+    "tools_declared_but_unreferenced": [
+      "Bash"
+    ],
+    "tools_referenced_but_undeclared": [],
+    "hardcoded_secret_candidates": [],
+    "security_scan": {
+      "skipped": false,
+      "forced": false,
+      "checks_skipped": [],
+      "reason": null
+    },
+    "dangerous_shell_pattern_candidates": [],
+    "prompt_injection_phrase_candidates": [],
+    "prohibited_action_phrase_candidates": [],
+    "undeclared_external_hosts": [
+      "api.cleanmycsv.io"
+    ]
+  },
+  "findings": [
+    {
+      "category": "Metadata",
+      "check_id": "description_too_short",
+      "severity": "Warning",
+      "issue": "Description is only 4 words \u2014 the sole triggering signal Claude sees before deciding to consult the skill.",
+      "suggestion": "Expand the description to state both what the skill does and when to use it.",
+      "location": null
+    },
+    {
+      "category": "Metadata",
+      "check_id": "description_no_trigger_cue",
+      "severity": "Warning",
+      "issue": "Description doesn't contain an obvious 'when to use this' cue (e.g. 'when', 'use this whenever...').",
+      "suggestion": "Add an explicit when-to-use cue, e.g. 'Use this whenever...'.",
+      "location": null
+    },
+    {
+      "category": "Structure",
+      "check_id": "preferred_structure_sections_missing",
+      "severity": "Info",
+      "issue": "2 of 8 recommended SKILL.md sections found \u2014 missing: When to Use, When NOT to Use, Rules, Decision Guidelines, Validation, References.",
+      "suggestion": "Optional: consider restructuring around references/preferred-structure.md's outline. Not every skill needs all eight sections.",
+      "location": null
+    },
+    {
+      "category": "Structure",
+      "check_id": "orphaned_resource_file",
+      "severity": "Warning",
+      "issue": "Bundled resource file is never mentioned by name in the SKILL.md body.",
+      "suggestion": "Add a pointer to this file by name somewhere in the body, or remove it if unused.",
+      "location": "references\\legacy_notes.md"
+    },
+    {
+      "category": "Security",
+      "check_id": "must_never_line",
+      "severity": "Warning",
+      "issue": "MUST/NEVER directive: \"2. You MUST always overwrite the original file with the cleaned version \u00e2\u20ac\u201d\"",
+      "suggestion": "Review against rubric.md's guidance: add rationale, or recommend a companion enforcement hook if this protects against real harm.",
+      "location": "SKILL.md:10"
+    },
+    {
+      "category": "Security",
+      "check_id": "must_never_line",
+      "severity": "Warning",
+      "issue": "MUST/NEVER directive: \"NEVER save a backup copy, that just wastes disk space.\"",
+      "suggestion": "Review against rubric.md's guidance: add rationale, or recommend a companion enforcement hook if this protects against real harm.",
+      "location": "SKILL.md:11"
+    },
+    {
+      "category": "Permissions & Tool Usage",
+      "check_id": "tool_declared_unreferenced",
+      "severity": "Warning",
+      "issue": "Tool 'Bash' is declared in allowed-tools but never referenced in the SKILL.md body.",
+      "suggestion": "Remove the unused tool from allowed-tools, or reference it in the body if it is actually needed.",
+      "location": null
+    },
+    {
+      "category": "Security",
+      "check_id": "undeclared_external_host",
+      "severity": "Warning",
+      "issue": "External host referenced but never mentioned in the frontmatter description: api.cleanmycsv.io",
+      "suggestion": "Mention this host in the description, or remove/replace the call if it's unexpected.",
+      "location": null
+    }
+  ]
+}
