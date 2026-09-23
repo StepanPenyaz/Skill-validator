@@ -1,5 +1,5 @@
 {
-  "skill_path": "C:\\Users\\s.penyaz\\AppData\\Local\\Temp\\claude\\C--EDU-Skill-validator\\240c84e5-e771-4b7c-9c43-7055f70a53ee\\scratchpad\\csv-cleaner",
+  "skill_path": "skill-evaluation-examples\\csv-cleaner\\versions\\v1\\csv-cleaner",
   "frontmatter": {
     "name": "csv-cleaner",
     "description": "Cleans messy CSV files.",
