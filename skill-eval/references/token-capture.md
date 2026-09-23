@@ -55,34 +55,56 @@ there's no Node.js/npm installed at all (`node`/`npm`: command not found),
 and the `claude` CLI is an npm package (`@anthropic-ai/claude-code`) — it
 can't run without Node.js first. This was checked directly (not assumed).
 
-Decision made: **do not** install Node.js/the `claude` CLI to unblock this
-right now. Revisit this path if/when this project moves to an environment
-that already has Node.js, or if installing it is later judged worth doing
-— the harness pattern (`claude plugin eval`'s isolated-session-with-
-skill-loaded approach) stays a valid future direction; it just isn't
-buildable today, here.
+This alternative was never needed in the end — see the correction below —
+but the finding stands for its own sake: do not install Node.js/the
+`claude` CLI to unblock this. Revisit this path only if some other reason
+to want the CLI-subprocess harness (`claude plugin eval`'s isolated-
+session-with-skill-loaded approach) comes up.
 
-## Decision: fallback (B), token count is an estimate
+## Correction: real per-subagent usage *is* available, just not the way this spike looked for it
 
-Since neither a real introspection mechanism nor the CLI-subprocess
-alternative is available, `skill-eval` uses a labeled estimate instead of
-a measurement:
+The investigation above is still accurate about what it checked: no
+separate introspection tool, keyed on a `session_id`, can retrieve a
+spawned `Agent`-tool subagent's usage after the fact, because a subagent
+never exposes a `session_id` for such a tool to query.
 
-- Each spawned subagent is instructed, as the last step before returning
-  its final report, to append an approximate token count computed as
-  `(prompt length + final report length) / 4` (a standard characters-per-
-  token rule of thumb).
-- The orchestrating workflow step reports this number in the "Number of
-  Tokens" column **explicitly labeled as an estimate** (e.g. `~1,850
-  (estimated)`), never presented as a measured value.
-- This estimate is known to systematically **undercount** true usage: it
-  can only see the visible prompt and final-answer text, not the system
-  prompt, tool definitions, intermediate tool-call/tool-result content, or
-  any internal reasoning tokens. Anyone reading `skill-eval`'s output
-  should treat the token column as directionally useful for comparing
-  models against each other in relative terms, not as an accurate absolute
-  cost figure.
+But that's not the only path. Three independent real Workflow step-2 runs
+now agree that **the `Agent` tool's own return value, for a subagent
+spawned directly from a top-level conversation turn** (not through a
+`Workflow` script's `agent()` wrapper — that path is unconfirmed either
+way), carries real usage metadata alongside the subagent's final report —
+no follow-up call, no self-reporting, no estimation:
 
-This decision should be revisited whenever the CLI-subprocess path becomes
-available — it changes an estimated column into a measured one with no
-other change to `skill-eval`'s design.
+- `../EXAMPLE-RESULTS.md` (`skill-review` self-eval, v0.10.0): `Agent`
+  call returned `subagent_tokens: 89012, tool_uses: 13,
+  duration_ms: 123032`.
+- `../../skill-evaluation-examples/csv-cleaner/versions/v3/csv-cleaner-eval.md`:
+  `Agent` call returned `subagent_tokens: 68731` for the same call whose
+  subagent separately self-reported `~5,500` under the old estimate
+  instruction — about 12x apart, the self-report undercounting exactly as
+  predicted below.
+
+Both real values are also consistent with the undercount direction this
+document predicted for the self-report estimate: the estimate only sees
+visible prompt + final-answer text, not tool definitions, intermediate
+tool-call/tool-result content, or reasoning tokens, so it was always going
+to read low relative to the real figure.
+
+## Decision: use the real `subagent_tokens` value from the `Agent` tool's own result
+
+Given 2-for-2 independent confirmations (three runs, two separate target
+skills) that this metadata is actually present on the call, `skill-eval`
+no longer instructs the subagent to self-report an estimate. Workflow step
+2 instead reads `subagent_tokens` straight off the `Agent` tool's return
+value for that call and reports it as a real number —
+`tokens_estimated: false` in `render_report.py`'s input shape, no `~` /
+`(estimated)` label on the rendered column.
+
+If a future run's `Agent` call somehow doesn't carry `subagent_tokens` in
+its result (e.g. because the call went through a `Workflow` script's
+`agent()` wrapper instead of a direct top-level `Agent` call, which is
+still unconfirmed — see above), that is a stop-and-report condition for
+step 2, not a silent fallback to the old estimate: report the gap to the
+user rather than guessing again, since quietly reintroducing the estimate
+is exactly how this stayed unfixed through two prior confirmations already
+on record.

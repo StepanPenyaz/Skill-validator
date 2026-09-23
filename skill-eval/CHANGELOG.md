@@ -4,6 +4,35 @@ All notable changes to the `skill-eval` skill are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 versioning follows [SemVer](https://semver.org/).
 
+## [0.13.0] — 2026-09-23
+
+### Changed
+- `references/token-capture.md`: formalized the correction
+  `EXAMPLE-RESULTS.md` (v0.10.0) had already flagged but never turned into
+  an actual decision change — a third independent real run (`skill-eval`
+  against `csv-cleaner` v3) reproduced the same gap between a self-reported
+  estimate and the `Agent` tool's real `subagent_tokens` metadata (~5,500
+  vs. 68,731, ~12x), for the same reason: nothing had updated the
+  Decision section or Workflow step 2 to stop prescribing the estimate.
+  Decision changed to: read `subagent_tokens` off the `Agent` tool's own
+  return value for a subagent spawned directly from a top-level turn; a
+  missing `subagent_tokens` is now a stop-and-report condition, not a
+  silent fallback to the old estimate.
+- `SKILL.md` Workflow step 2: subagents are no longer asked to self-report
+  a token estimate; step 2 now reads the real `subagent_tokens` value and
+  reports `tokens_estimated: false`. Also now explicit that the `Agent`
+  call must be made directly from the top-level turn, not through a
+  `Workflow` script's `agent()` wrapper (unconfirmed whether that path
+  surfaces the same metadata).
+- `README.md`: "Number of Tokens" column described as a real measured
+  value instead of a caveat about checking which of two mechanisms
+  produced a given number.
+
+### Fixed
+- No prior version actually applied `EXAMPLE-RESULTS.md`'s own finding to
+  the skill's prescribed behavior; every real run since kept rediscovering
+  and re-flagging the same gap instead of it being resolved once.
+
 ## [0.12.0] — 2026-09-20
 
 ### Added

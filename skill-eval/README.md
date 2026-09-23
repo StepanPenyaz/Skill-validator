@@ -20,14 +20,13 @@ qualitative), run the target skill per model, write a judgment, render the
 table. See [`EXAMPLE-RESULTS.md`](EXAMPLE-RESULTS.md) for a real,
 end-to-end run against `skill-review` itself — not a synthetic example.
 
-One thing worth knowing before relying on the "Number of Tokens" column:
-that demo found the token-count design in
-[`references/token-capture.md`](references/token-capture.md) is more
-pessimistic than it needs to be for at least some execution paths — see
-that file's note and `EXAMPLE-RESULTS.md` for the details. Treat the
-token column as directionally useful, and check which of the two
-mechanisms (measured vs. estimated) actually produced a given number,
-until that gets fully resolved.
+The "Number of Tokens" column is a real, measured value: Workflow step 2
+reads `subagent_tokens` straight off the `Agent` tool's own return
+metadata for each per-model run, no self-reporting or estimation
+involved. This was corrected from an earlier, more pessimistic design —
+see [`references/token-capture.md`](references/token-capture.md) for the
+investigation and `EXAMPLE-RESULTS.md` for the run that first surfaced the
+correction.
 
 Remaining work is tracked by this repo's open `skill-eval:`-prefixed
 issues (docs, further regression coverage, etc.) — see
@@ -167,7 +166,7 @@ skill-eval/
 ├── references/
 │   ├── models_config.yaml          # Editable default_models list (see above)
 │   ├── task-authoring.md            # tests/fixtures/tasks/<skill-name>.yaml format
-│   └── token-capture.md              # Why "Number of Tokens" is (usually) an estimate
+│   └── token-capture.md              # Why "Number of Tokens" is a real measured value
 └── tests/
     ├── run_regression.py               # This skill's own regression suite
     └── fixtures/

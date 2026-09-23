@@ -34,3 +34,13 @@
   replace the prescribed estimate, since changing the token-source
   mechanism is a `skill-eval` design decision, not something to make
   unilaterally mid-run.
+- **Resolved**: `references/token-capture.md`'s Decision and `SKILL.md`
+  Workflow step 2 have since been updated (v0.13.0) to use the real
+  `subagent_tokens` value instead of the self-reported estimate — this was
+  the second independent confirmation (after `EXAMPLE-RESULTS.md`'s
+  `skill-review` run) that the metadata is reliably present, and the one
+  that actually got the design changed. The table row above is left as
+  the historical record of what this run's report looked like under the
+  design in effect at the time (`~5,500 (estimated)`); the real number for
+  that same run, `68,731`, is what a re-run today would report directly
+  in the "Number of Tokens" column.
