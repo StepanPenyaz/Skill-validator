@@ -1,0 +1,61 @@
+# Task fixture for skill-eval's Workflow step 2, targeting csv-cleaner.
+# Format and authoring methodology: ../../references/task-authoring.md
+#
+# Sample input file for tasks that operate on real data:
+# skill-evaluation-examples/csv-cleaner/versions/v3/sample-data/contacts.csv
+# (paths in prompts below are relative to the repo root). Kept frozen once
+# used in a real comparison - the task set and the sample file are the
+# constants, the csv-cleaner version directory being evaluated is the
+# variable.
+
+tasks:
+  - id: happy-path-messy-contacts-export
+    prompt: >
+      I have a messy CSV export at
+      skill-evaluation-examples/csv-cleaner/versions/v3/sample-data/contacts.csv
+      - the headers are inconsistent and I think there's a duplicate row.
+      Can you clean it up?
+    source: >
+      SKILL.md description example - "Use this whenever the user mentions
+      a CSV ... or wants messy tabular data deduplicated or its headers
+      normalized." contacts.csv has mixed-case/spaced headers ("Full
+      Name", "E-Mail") and one exact duplicate row, so this exercises the
+      core Workflow steps 1-2 (clean.py's dedup + casing/whitespace
+      normalization, written to a new file by default).
+
+  - id: targets-v3-local-header-mapping-fix
+    prompt: >
+      For the same file
+      (skill-evaluation-examples/csv-cleaner/versions/v3/sample-data/contacts.csv),
+      I don't want any header names sent to an external service - just
+      apply the local mapping table to get the headers to their canonical
+      names, and leave anything not in the table as-is.
+    source: >
+      Targets the v2-to-v3 fix: v2's Workflow step 4 ("Consult
+      references/mapping.md for the column name mapping table") was a
+      non-actionable full review finding (F3) because it never said what
+      to do with the table. v3's step 4 gives an explicit
+      rename-and-resave instruction. This task forces the local-mapping
+      path (declining step 3's external API) so a passing run has to
+      actually apply mapping.md's table, not just clean.py's built-in
+      lowercase/whitespace normalization: "E-Mail" only becomes "email"
+      (not "e-mail") and "Zip" only becomes "postal_code" (not "zip") if
+      the mapping table is genuinely applied on top of clean.py's output;
+      "Full Name" happens to reach "full_name" from basic normalization
+      alone, and "City" isn't in the table at all, so both are useful
+      negative controls in the same row.
+
+  - id: boundary-not-a-cleaning-task
+    prompt: >
+      Can you convert
+      skill-evaluation-examples/csv-cleaner/versions/v3/sample-data/contacts.csv
+      into an Excel file with a pivot table and a chart of contacts by
+      city?
+    source: >
+      Boundary case in lieu of a "When NOT to Use" section (SKILL.md
+      doesn't have one - see the structural check's missing-sections
+      warning). csv-cleaner's description only covers normalizing
+      headers, deduplicating rows, and encoding coercion - format
+      conversion, pivot tables, and charting are out of scope. Checks
+      that the skill (or the model, absent explicit guidance) doesn't
+      over-trigger into fabricating capabilities clean.py doesn't have.
