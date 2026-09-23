@@ -1,0 +1,97 @@
+{
+  "skill_path": "skill-evaluation-examples\\csv-cleaner\\versions\\v3\\csv-cleaner",
+  "frontmatter": {
+    "name": "csv-cleaner",
+    "description": "Cleans messy, inconsistently-formatted CSV files \u00e2\u20ac\u201d normalizes header casing/whitespace automatically, and maps header names to a canonical schema either locally (Claude applies references/mapping.md's table by hand \u00e2\u20ac\u201d see Workflow step 4) or through the api.cleanmycsv.io normalization service (see references/external-calls.json); removes duplicate rows; and coerces the file to UTF-8, replacing any bytes that can't be decoded with a placeholder character (source-encoding detection/repair, e.g. Latin-1 or Windows-1252 recovery, isn't attempted). Writes the result to a new file by default. Use this whenever the user mentions a CSV, a spreadsheet export, or wants messy tabular data deduplicated or its headers normalized, even if they don't say \"CSV\" explicitly.",
+    "allowed-tools": "Bash",
+    "metadata": {
+      "version": "1.2.0"
+    }
+  },
+  "compliance_errors": [],
+  "structural_warnings": [
+    "3 of 8 recommended SKILL.md sections found \u2014 missing: When to Use, When NOT to Use, Rules, Decision Guidelines, Validation. Optional: consider restructuring around references/preferred-structure.md's outline. Not every skill needs all eight sections.",
+    "Tool 'Bash' is declared in allowed-tools but never referenced in the SKILL.md body. Remove the unused tool from allowed-tools, or reference it in the body if it is actually needed."
+  ],
+  "metrics": {
+    "description_length_chars": 770,
+    "description_word_count": 105,
+    "description_has_trigger_cue": true,
+    "skill_md_total_line_count": 43,
+    "skill_md_body_line_count": 36,
+    "preferred_structure_sections": {
+      "present": [
+        "Purpose",
+        "Workflow",
+        "References"
+      ],
+      "missing": [
+        "When to Use",
+        "When NOT to Use",
+        "Rules",
+        "Decision Guidelines",
+        "Validation"
+      ]
+    },
+    "dev_only_skill_mds_excluded": [],
+    "resource_dirs_present": {
+      "scripts": true,
+      "references": true,
+      "assets": false
+    },
+    "resource_file_count": 3,
+    "resource_dir_file_counts": {
+      "scripts": 1,
+      "references": 2,
+      "assets": 0
+    },
+    "orphaned_resource_files": [],
+    "large_reference_files_missing_toc": [],
+    "portability_issues": [],
+    "imperative_marker_counts": {
+      "MUST": 0,
+      "NEVER": 0,
+      "ALWAYS": 0,
+      "SHOULD": 0,
+      "REQUIRED": 0,
+      "DO NOT": 0
+    },
+    "must_never_lines": [],
+    "declared_tools": [
+      "Bash"
+    ],
+    "tools_declared_but_unreferenced": [
+      "Bash"
+    ],
+    "tools_referenced_but_undeclared": [],
+    "hardcoded_secret_candidates": [],
+    "security_scan": {
+      "skipped": false,
+      "forced": false,
+      "checks_skipped": [],
+      "reason": null
+    },
+    "dangerous_shell_pattern_candidates": [],
+    "prompt_injection_phrase_candidates": [],
+    "prohibited_action_phrase_candidates": [],
+    "undeclared_external_hosts": []
+  },
+  "findings": [
+    {
+      "category": "Structure",
+      "check_id": "preferred_structure_sections_missing",
+      "severity": "Info",
+      "issue": "3 of 8 recommended SKILL.md sections found \u2014 missing: When to Use, When NOT to Use, Rules, Decision Guidelines, Validation.",
+      "suggestion": "Optional: consider restructuring around references/preferred-structure.md's outline. Not every skill needs all eight sections.",
+      "location": null
+    },
+    {
+      "category": "Permissions & Tool Usage",
+      "check_id": "tool_declared_unreferenced",
+      "severity": "Warning",
+      "issue": "Tool 'Bash' is declared in allowed-tools but never referenced in the SKILL.md body.",
+      "suggestion": "Remove the unused tool from allowed-tools, or reference it in the body if it is actually needed.",
+      "location": null
+    }
+  ]
+}
