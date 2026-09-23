@@ -1,12 +1,12 @@
 {
   "skill_name": "csv-cleaner",
-  "reviewed_at": "2026-09-22T00:00:00Z",
-  "overall_verdict": "pass",
+  "reviewed_at": "2026-09-23T00:00:00Z",
+  "overall_verdict": "needs_work",
   "category_scores": {
     "compliance": "pass",
     "structure_and_progressive_disclosure": "pass",
-    "description_and_triggering": "pass",
-    "writing_style_and_content": "pass",
+    "description_and_triggering": "major",
+    "writing_style_and_content": "major",
     "safety": "pass"
   },
   "metrics": {
@@ -29,7 +29,55 @@
     "undeclared_external_hosts": [],
     "security_scan": {"skipped": false, "forced": false, "checks_skipped": [], "reason": null}
   },
-  "findings": [],
+  "findings": [
+    {
+      "id": "F1",
+      "category": "description_and_triggering",
+      "severity": "major",
+      "location": "frontmatter.description",
+      "issue": "The description claims header names are normalized \"against a canonical schema ... locally via references/mapping.md\", but scripts/clean.py never opens or applies mapping.md — it only lowercases, strips, and underscore-replaces the header row (clean.py:12). Nothing in the Workflow instructs Claude to apply the table's renames either, so the promised local canonical-schema mapping isn't actually delivered unless the user opts into the external API (step 3).",
+      "current_text": "normalizes header names against a canonical schema (locally via references/mapping.md, or through the api.cleanmycsv.io normalization service, see references/external-calls.json)",
+      "suggested_rewrite": "normalizes header casing/whitespace automatically, and maps header names to a canonical schema either locally (Claude applies references/mapping.md's table by hand — see Workflow step 4) or through the api.cleanmycsv.io normalization service (see references/external-calls.json)",
+      "why_it_matters": "A user relying on the \"local\" path for a header like \"e-mail\" or \"fname\" would get a lowercased-but-still-wrong header (\"e-mail\", \"fname\") instead of the canonical \"email\"/\"full_name\" the description promises, with no error or warning — a silent capability gap between what's claimed and what's delivered."
+    },
+    {
+      "id": "F2",
+      "category": "description_and_triggering",
+      "severity": "major",
+      "location": "frontmatter.description / scripts/clean.py:8",
+      "issue": "The description promises the skill \"fixes encoding issues\", but clean.py opens the file with errors=\"replace\" (line 8), which silently substitutes U+FFFD for any byte sequence that isn't valid UTF-8 rather than detecting the file's actual source encoding (e.g. Latin-1, Windows-1252) and re-encoding it correctly. This is data loss, not a fix, and nothing in the skill warns the user it happened.",
+      "current_text": "fixes encoding issues",
+      "suggested_rewrite": "coerces the file to UTF-8, replacing any bytes that can't be decoded as UTF-8 with a placeholder character (source-encoding detection/repair, e.g. Latin-1 or Windows-1252 recovery, isn't attempted)",
+      "why_it_matters": "A Latin-1-exported CSV containing \"café\" becomes \"caf�\" in the cleaned output with no notice — a user who trusts \"fixes encoding issues\" has no reason to inspect the result for corrupted characters before using it downstream."
+    },
+    {
+      "id": "F3",
+      "category": "writing_style_and_content",
+      "severity": "major",
+      "location": "SKILL.md:28 (Workflow step 4)",
+      "issue": "Step 4 says \"Consult references/mapping.md for the column name mapping table\" but gives no instruction for what to do with it — there's no mechanism in clean.py to apply it, and the step doesn't say to rename headers, when this step applies relative to step 3, or how to write the result back. As written, opening the file has no concrete follow-up action.",
+      "current_text": "4. Consult `references/mapping.md` for the column name mapping table.",
+      "suggested_rewrite": "4. If the user doesn't want header names sent to the external service (step 3), apply `references/mapping.md`'s table yourself instead: for each header in the cleaned output that matches a listed variant, rename it to the corresponding canonical name, then re-save the file.",
+      "why_it_matters": "Without an explicit action, Claude may either skip the canonical-mapping step entirely or improvise an ad hoc approach, producing inconsistent output across runs for the same input."
+    },
+    {
+      "id": "F4",
+      "category": "writing_style_and_content",
+      "severity": "minor",
+      "location": "SKILL.md:23 (Workflow step 3)",
+      "issue": "Step 3's curl command reads from `headers.json` (`-d @headers.json`), but no step creates this file or defines its expected shape.",
+      "current_text": "call `curl https://api.cleanmycsv.io/normalize-headers -d @headers.json`.",
+      "suggested_rewrite": "write the input file's header names to a temp `headers.json` as `{\"headers\": [\"email\", \"full name\", \"zip\"]}`, then call `curl https://api.cleanmycsv.io/normalize-headers -d @headers.json`.",
+      "why_it_matters": "Format-sensitive steps that skip a concrete example are the most common source of run-to-run inconsistency; one worked example removes the ambiguity."
+    }
+  ],
   "orphaned_resource_files_confirmed": [],
-  "summary": "csv-cleaner now passes clean. All five findings from the v1 review are resolved: the api.cleanmycsv.io call is named in the description, explained in the new Workflow step 3, and registered in references/external-calls.json with what data it sends and why (F1); the description is now 68 words with an explicit when-to-use cue and mentions both the overwrite behavior and the external call (F2); the script writes to <path>.cleaned.csv by default and only overwrites the original when the user explicitly asks via --in-place, removing the irreversible-by-default risk (F3); the orphaned references/legacy_notes.md was deleted since it documented an abandoned approach with no bearing on the current implementation (F4); and the overwrite/backup instruction is now two separate, clearly-worded Workflow steps (F5). The one remaining gate-mode candidate — 'Bash' declared but not referenced by name — was checked against the real body and dismissed as a false positive: the tool is genuinely needed to run both scripts/clean.py and curl, the check just can't see that from a literal name search."
+  "dismissed_candidates": [
+    {
+      "check_id": "tool_declared_unreferenced",
+      "candidate": "Tool 'Bash' is declared in allowed-tools but never referenced in the SKILL.md body.",
+      "reason_dismissed": "False positive: the body clearly requires Bash to execute `python3 scripts/clean.py ...` (step 1) and `curl https://api.cleanmycsv.io/...` (step 3) — the literal word \"Bash\" just never appears in prose. No finding."
+    }
+  ],
+  "summary": "csv-cleaner is compliant and safe on its own terms: no hardcoded secrets, no undeclared external hosts, and the api.cleanmycsv.io call is disclosed to the user up front with an explicit registry of what it sends. The gap is between what the description promises and what scripts/clean.py actually does: \"canonical schema\" mapping and \"fixes encoding issues\" both overclaim relative to the script's real behavior (generic case/whitespace normalization; lossy errors=\"replace\" decoding with no warning), and Workflow step 4 tells Claude to read the mapping table without saying what to do with it. Highest-priority fix: either scope the description down to match clean.py's real behavior, or close the gap by making Workflow step 4 an actionable instruction (apply the table by hand) and having clean.py surface a warning when characters are replaced during decode."
 }

@@ -1,11 +1,12 @@
 # Full Review: csv-cleaner
 
-**Overall verdict: PASS**
+**Overall verdict: NEEDS WORK**
 
-All five findings from the v1 review (F1-F5) are resolved. The skill now
-discloses its external call, defaults to a non-destructive write, has a
-triggering description, and no longer bundles an orphaned reference file.
-No findings remain.
+Compliance and safety are clean — no hardcoded secrets, no undeclared
+external hosts, and the `api.cleanmycsv.io` call is disclosed to the user
+up front with an explicit registry of what it sends. The problem is a gap
+between what the description promises and what `scripts/clean.py` actually
+does.
 
 ## Category scores
 
@@ -13,25 +14,26 @@ No findings remain.
 |---|---|
 | Compliance | Pass |
 | Safety | Pass |
-| Description & Triggering | Pass |
+| Description & Triggering | Major |
 | Structure & Progressive Disclosure | Pass |
-| Writing Style & Content | Pass |
+| Writing Style & Content | Major |
 
-## What changed since v1
+## Findings
 
-| # | v1 issue | Fix applied in v2 |
-|---|---|---|
-| F1 | Undisclosed external call to `api.cleanmycsv.io` (Blocker) | Host is now named in `frontmatter.description`; Workflow step 3 states exactly what is sent (header names only, never row data) and why; a new `references/external-calls.json` registers the call with `key`/`value`/`description`, linked from the SKILL.md References section. |
-| F2 | 4-word description, no when-cue (Major) | Rewritten to 68 words: states what the skill does, that it writes to a new file by default, names the external service, and gives an explicit "Use this whenever..." trigger cue. |
-| F3 | `MUST overwrite` + `NEVER backup` on an irreversible operation (Major) | `scripts/clean.py` now writes to `<path>.cleaned.csv` by default; the original is only overwritten in place if the user explicitly asks (`--in-place` flag). |
-| F4 | `references/legacy_notes.md` never referenced anywhere (Minor) | Deleted — it documented an abandoned v0.x approach with no bearing on the current implementation. |
-| F5 | Two directives crammed onto one line (Minor) | Split into two separate Workflow steps (now steps 1-2), each with its own clear instruction. |
+| ID | Severity | Category | Issue | Suggested fix |
+|---|---|---|---|---|
+| F1 | Major | Description & Triggering | Description claims header names are mapped "against a canonical schema ... locally via `references/mapping.md`", but `clean.py` never reads that file — it only lowercases/strips/underscore-replaces the header row. | Scope the claim down to what's delivered, or make Workflow step 4 actually apply the table (see F3). |
+| F2 | Major | Description & Triggering | Description claims the skill "fixes encoding issues", but `clean.py:8` uses `errors="replace"`, which silently replaces undecodable bytes with `�` instead of detecting/repairing the source encoding — data loss with no warning. | Reword to "coerces the file to UTF-8, replacing bytes that can't be decoded" — don't call it a fix. |
+| F3 | Major | Writing Style & Content | Workflow step 4 says to "consult" `references/mapping.md` but never says what to do with it — no rename instruction, no script support. | Rewrite step 4 as an explicit action: rename matching headers to their canonical form by hand, then re-save. |
+| F4 | Minor | Writing Style & Content | Step 3's `curl -d @headers.json` references a file that's never created or given a shape anywhere in the skill. | Add a one-line example of `headers.json`'s expected JSON shape. |
 
-## Remaining gate-mode candidate — checked and dismissed
+Full current-text/suggested-rewrite pairs and rationale are in `review.json`.
 
-`structural_check.py` still flags `tool_declared_unreferenced` for `Bash`:
-the literal word "Bash" never appears in the SKILL.md body. Reading the
-actual Workflow confirms this is a false positive — step 1 runs
+## Gate-mode candidate — checked and dismissed
+
+`structural_check.py` flags `tool_declared_unreferenced` for `Bash`: the
+literal word "Bash" never appears in the SKILL.md body. Reading the actual
+Workflow confirms this is a false positive — step 1 runs
 `python3 scripts/clean.py` and step 3 runs `curl`, both of which require a
 shell. The check only does a literal-string search for the tool name and
 can't infer that from the commands used, so this candidate is dismissed
