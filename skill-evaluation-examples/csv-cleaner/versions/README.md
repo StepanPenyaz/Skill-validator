@@ -62,6 +62,7 @@ diff of every version so far, from the current baseline to the final
 | Version | Verdict | Notes |
 |---|---|---|
 | [v1](v1/) | `blocked` | Baseline. Undisclosed external call, unsafe overwrite policy, thin description, orphaned reference file. See [v1/reports/review.md](v1/reports/review.md). |
-| [v2](v2/) | `pass` | All 5 v1 findings fixed, incl. the external call registered in `references/external-calls.json` per [evaluation-checks.md](../../docs/plans/evaluation-checks.md). See [v2/reports/review.md](v2/reports/review.md) and the diff in [v2/diffs/](v2/diffs/). |
+| [v2](v2/) | `needs_work` | All 5 v1 findings fixed. A later independent full review (not anchored to the v1 diff) found the description overclaimed `clean.py`'s actual mapping/encoding behavior and Workflow step 4 was non-actionable — see [v2/reports/review.md](v2/reports/review.md). The original `v1-vs-v2` diffs this review superseded are no longer present. |
+| [v3](v3/) | `pass_with_suggestions` | Fixes all 4 findings from v2's independent review (description accuracy, Workflow steps 3-4 made actionable). One new minor finding: step 4's rename instruction doesn't name a concrete mechanism. See [v3/reports/review.md](v3/reports/review.md) and the diff in [v3/diffs/](v3/diffs/). |
 
 More versions are added here if new requirements or findings come up.

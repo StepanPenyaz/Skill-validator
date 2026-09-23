@@ -1,0 +1,53 @@
+{
+  "skill_name": "csv-cleaner",
+  "reviewed_at": "2026-09-23T00:00:00Z",
+  "overall_verdict": "pass_with_suggestions",
+  "category_scores": {
+    "compliance": "pass",
+    "structure_and_progressive_disclosure": "pass",
+    "description_and_triggering": "pass",
+    "writing_style_and_content": "minor",
+    "safety": "pass"
+  },
+  "metrics": {
+    "skill_md_body_line_count": 36,
+    "description_word_count": 105,
+    "resource_file_count": 3,
+    "resource_dir_file_counts": {"scripts": 1, "references": 2, "assets": 0},
+    "imperative_marker_counts": {"MUST": 0, "NEVER": 0, "ALWAYS": 0, "SHOULD": 0, "REQUIRED": 0, "DO NOT": 0},
+    "preferred_structure_sections": {
+      "present": ["Purpose", "Workflow", "References"],
+      "missing": ["When to Use", "When NOT to Use", "Rules", "Decision Guidelines", "Validation"]
+    },
+    "declared_tools": ["Bash"],
+    "tools_declared_but_unreferenced": ["Bash"],
+    "tools_referenced_but_undeclared": [],
+    "hardcoded_secret_candidates": [],
+    "dangerous_shell_pattern_candidates": [],
+    "prompt_injection_phrase_candidates": [],
+    "prohibited_action_phrase_candidates": [],
+    "undeclared_external_hosts": [],
+    "security_scan": {"skipped": false, "forced": false, "checks_skipped": [], "reason": null}
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "category": "writing_style_and_content",
+      "severity": "minor",
+      "location": "SKILL.md:32 (Workflow step 4)",
+      "issue": "Step 4 (the fix for v2's F3) now gives an explicit rename instruction, but still doesn't say which mechanism performs the rename and re-save. Steps 1 and 3 both name a concrete command (`python3 scripts/clean.py ...`, `curl ...`); step 4 just says to 'apply the table yourself... rename it... then re-save the file' without saying whether that happens via a shell one-liner (which would need `Bash`, already declared), a text/file-edit tool, or manual reconstruction of the CSV.",
+      "current_text": "4. If the user doesn't want header names sent to the external service (step 3), apply `references/mapping.md`'s table yourself instead: for each header in the cleaned output that matches a listed variant, rename it to the corresponding canonical name, then re-save the file.",
+      "suggested_rewrite": "4. If the user doesn't want header names sent to the external service (step 3), apply `references/mapping.md`'s table yourself: read the cleaned CSV's header row, rename each header that matches a listed variant to its canonical name, and write the file back out in place (e.g. via a short Python/`csv` snippet run through Bash, consistent with step 1's tooling) rather than reconstructing it by hand.",
+      "why_it_matters": "Without a named mechanism, two runs of this step could produce different results (a careful full rewrite of the CSV vs. an ad hoc partial edit that corrupts quoting/delimiters) purely because Claude picked a different way to 're-save the file' each time — the same run-to-run inconsistency risk the original F3 finding was raised over, just one level down."
+    }
+  ],
+  "orphaned_resource_files_confirmed": [],
+  "dismissed_candidates": [
+    {
+      "check_id": "tool_declared_unreferenced",
+      "candidate": "Tool 'Bash' is declared in allowed-tools but never referenced in the SKILL.md body.",
+      "reason_dismissed": "False positive, same as v1/v2: the body requires Bash to run `python3 scripts/clean.py ...` (step 1) and `curl https://api.cleanmycsv.io/...` (step 3) — the literal word \"Bash\" just never appears in prose. No finding."
+    }
+  ],
+  "summary": "All four findings from the prior independent review (F1/F2 description overclaims about canonical mapping and encoding 'fixing', F3's non-actionable mapping step, F4's undefined headers.json shape) are resolved: the description now states accurately that local canonical mapping is something Claude applies by hand from references/mapping.md, encoding handling is described as lossy UTF-8 coercion rather than a 'fix', Workflow step 4 gives a concrete rename-and-resave instruction, and step 3 shows headers.json's expected shape. Verdict moves from needs_work to pass_with_suggestions: one new minor finding remains — step 4's rename instruction still doesn't name a concrete mechanism the way steps 1 and 3 do, leaving room for run-to-run inconsistency in exactly the way the original F3 finding warned about, just one level down. Not blocking; worth tightening in a future revision."
+}

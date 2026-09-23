@@ -2,7 +2,7 @@
 name: skill-eval
 description: Runs a Claude Agent Skill against real tasks and reports what it actually cost to do so — model used, token count, wall-clock time, and a short qualitative judgment of how the run went. Use this whenever the user asks to evaluate a skill's runtime cost, compare how a skill performs across models, measure a skill's token/time cost, or wants to know whether a new version of a skill is worth its cost relative to the old one. Not for asking whether a SKILL.md is well-written — that's skill-review.
 metadata:
-  version: "0.12.0"
+  version: "0.13.0"
   maintained_by: "Claude Code Skill Evaluation project"
 ---
 
@@ -97,13 +97,16 @@ only surface once a model actually reads the skill. See Workflow.
      (format: `references/task-authoring.md`). If it doesn't exist yet for
      this target skill, that's a stop condition too — see Decision
      Guidelines, don't invent tasks on the fly instead.
-   - **For each model in the list, spawn one `Agent`-tool subagent**
-     (`model` parameter set to that model) covering *all* tasks from the
-     fixture in a single conversation — not one subagent per task. This
-     is what makes "one row per model" in the final table meaningful: the
-     row reflects the cost of evaluating the whole task set on that
-     model, not just one task, and step 3 reads one coherent transcript
-     per model instead of stitching several together.
+   - **For each model in the list, spawn one `Agent`-tool subagent directly
+     from this top-level turn** (`model` parameter set to that model)
+     covering *all* tasks from the fixture in a single conversation — not
+     one subagent per task, and not through a `Workflow` script's
+     `agent()` wrapper (see `references/token-capture.md` on why the call
+     site matters for step 2's own token capture below). One subagent per
+     task set is also what makes "one row per model" in the final table
+     meaningful: the row reflects the cost of evaluating the whole task
+     set on that model, not just one task, and step 3 reads one coherent
+     transcript per model instead of stitching several together.
    - **The subagent's prompt must give it everything it needs to actually
      act as the target skill**, since a target skill sitting in this repo
      isn't necessarily auto-loaded/triggered for a fresh subagent the way
@@ -111,26 +114,23 @@ only surface once a model actually reads the skill. See Workflow.
      `<target-skill-directory>/SKILL.md` (and any bundled `scripts/`/
      `references/` it points to) and follow its instructions to complete
      each task below, in order, using its own tools as needed — then list
-     the task prompts from the fixture, each labeled with its `id`.
-   - **The subagent's prompt must also ask it to self-report its token
-     usage**, since nothing in this environment can retrieve that after
-     the fact (see `references/token-capture.md`). Instruct it: as the
-     last line of your final report, on its own line, write `Approx.
-     tokens used: ~N (estimated)`, where `N` is (everything you were
-     given in this prompt, in characters, plus your full final report, in
-     characters) ÷ 4 — a standard characters-per-token rule of thumb.
+     the task prompts from the fixture, each labeled with its `id`. Do
+     *not* ask it to self-report a token estimate — see the next step.
    - **Capture wall-clock time yourself**, around the `Agent` call — start
      a timestamp immediately before spawning it, stop immediately after
      it returns. Don't rely on the subagent to report its own elapsed
      time; it has no reliable way to know that either.
-   - **Parse the token estimate back out of the subagent's final report**
-     (the `Approx. tokens used: ~N` line) rather than asking for it as
-     structured output — the subagent's own final report *is* what step 3
-     reads as the run's transcript, so keep it as one coherent piece of
-     text for that step to work with, not a report plus a separate
-     side-channel value.
+   - **Read the real token count off the `Agent` tool's own return value**
+     for that call (`subagent_tokens`) — see `references/token-capture.md`
+     for why this is a measured number, not an estimate, as long as the
+     call was made the way the first bullet above describes. Report it
+     with `tokens_estimated: false`. If `subagent_tokens` is absent from
+     the result for some call, that's a stop-and-report condition for
+     this run, not a silent fallback to a self-reported estimate —
+     surface it to the user (see `token-capture.md`'s Decision section)
+     rather than guessing.
    - Continue to step 3 once every model in the list has a captured
-     `{model, tokens (estimated), time_seconds, transcript}`.
+     `{model, tokens (real), time_seconds, transcript}`.
 
 3. **Write a judgment for each run.** For each model's run from step 2,
    read that run's transcript/output and write 2-4 short bullet points —
@@ -267,8 +267,9 @@ only surface once a model actually reads the skill. See Workflow.
 - `references/task-authoring.md` — the `tests/fixtures/tasks/<skill-name>.yaml`
   format and how to write one. See Workflow step 2.
 - `references/token-capture.md` — why the "Number of Tokens" column is a
-  labeled estimate, not a measurement, in this environment, and how the
-  estimate is computed. See Workflow step 2.
+  real, measured value (read off the `Agent` tool's own return metadata),
+  not an estimate, and what to do if that metadata is ever missing. See
+  Workflow step 2.
 - `scripts/render_report.py` — run in Workflow step 4 to render the final
   Markdown report; purely mechanical, no model call, same role
   `skill-review/scripts/generate_static_report.py` plays there.
