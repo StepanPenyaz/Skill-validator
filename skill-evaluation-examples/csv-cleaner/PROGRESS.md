@@ -113,8 +113,57 @@ not blocking, see
 
 Full detail: [`versions/v3/reports/review.md`](versions/v3/reports/review.md).
 
+## v4 — v3's last finding fixed, plus a token-cost-motivated redesign
+
+**Verdict: `pass`** (was `pass_with_suggestions`)
+
+| Category | v3 | v4 |
+|---|---|---|
+| Compliance | Pass | Pass |
+| Safety | Pass | Pass |
+| Description & Triggering | Pass | Pass |
+| Structure & Progressive Disclosure | Pass | Pass |
+| Writing Style & Content | Minor | Pass |
+
+| # | v3 issue | Fix in v4 |
+|---|---|---|
+| F1 | Step 4's rename instruction didn't name a concrete mechanism, unlike steps 1 and 3 which name `python3`/`curl`. | Local mapping is now `scripts/clean.py`'s own `--map references/mapping.json` flag (a new machine-readable `references/mapping.json`, replacing the prose-only `mapping.md`) — the mechanism is the same `python3 scripts/clean.py` command step 1 already names, just with one more flag. |
+
+Not a tracked finding, but a second change made in the same pass, motivated
+by v3's `csv-eval` run costing 67,122 tokens for three small tasks: v3's
+description and Workflow read as if canonical-schema mapping (via the
+local table or the external service) was a normal part of cleaning any
+CSV, and its own eval run showed the cost directly — task 1's prompt never
+asked for header mapping, yet the model attempted the external
+`api.cleanmycsv.io` call anyway before falling back to local mapping. v4
+makes canonical-schema mapping explicitly opt-in (steps 3-4 both open with
+"Only if the user also wants headers renamed to a canonical schema"), with
+the local script flag as the default path and the external service gated
+on the user asking for that service specifically.
+
+**Diff vs v3** (via `skill-review/scripts/diff_reviews.py`):
+
+- Deterministic (gate mode): unchanged, 2 → 2 structural warnings (both
+  pre-existing false positives/info, not touched by this fix). Full output:
+  [`versions/v4/diffs/v3-vs-v4-deterministic.md`](versions/v4/diffs/v3-vs-v4-deterministic.md).
+- Qualitative (full review): `pass_with_suggestions` → `pass`, 1 resolved,
+  0 new, 0 severity-changed. Full output:
+  [`versions/v4/diffs/v3-vs-v4-qualitative.md`](versions/v4/diffs/v3-vs-v4-qualitative.md).
+
+Full detail: [`versions/v4/reports/review.md`](versions/v4/reports/review.md).
+
+**`skill-eval` re-run** (same frozen task fixture and sample file, per
+`references/task-authoring.md`): 65,096 real `subagent_tokens`, about 3%
+lower than v3's 67,122 — a real but modest drop, and wall-clock time
+actually went up (13m 57s vs. 2m 25s), which the report attributes to this
+environment's known time/token decoupling rather than a regression. One
+run per version, so this is a data point, not a confirmed trend — see
+[`versions/v4/csv-cleaner-eval.md`](versions/v4/csv-cleaner-eval.md) for
+the full run, including the behavioral confirmation that task 1 no longer
+attempts the external call.
+
 ---
 
-*v3 reaches `pass_with_suggestions`, with one open minor finding — see
-[`versions/v3/csv-cleaner-eval.md`](versions/v3/csv-cleaner-eval.md)
+*v4 reaches `pass`, with all findings resolved — see
+[`versions/v4/csv-cleaner-eval.md`](versions/v4/csv-cleaner-eval.md)
 for `skill-eval`'s runtime-cost/behavior run against this version.*

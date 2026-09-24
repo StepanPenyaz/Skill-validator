@@ -1,0 +1,32 @@
+{
+  "skill_name": "csv-cleaner",
+  "reviewed_at": "2026-09-24T00:00:00Z",
+  "overall_verdict": "pass",
+  "category_scores": {
+    "compliance": "pass",
+    "structure_and_progressive_disclosure": "pass",
+    "description_and_triggering": "pass",
+    "writing_style_and_content": "pass",
+    "safety": "pass"
+  },
+  "metrics": {
+    "skill_md_body_line_count": 44,
+    "description_word_count": 130,
+    "resource_file_count": 3,
+    "resource_dir_file_counts": {"scripts": 1, "references": 2, "assets": 0},
+    "imperative_marker_counts": {"MUST": 0, "NEVER": 0, "ALWAYS": 0},
+    "preferred_structure_sections": {"present": ["Purpose", "Workflow", "References"], "missing": ["When to Use", "When NOT to Use", "Rules", "Decision Guidelines", "Validation"]},
+    "declared_tools": ["Bash"],
+    "tools_declared_but_unreferenced": ["Bash"],
+    "tools_referenced_but_undeclared": [],
+    "hardcoded_secret_candidates": [],
+    "dangerous_shell_pattern_candidates": [],
+    "prompt_injection_phrase_candidates": [],
+    "prohibited_action_phrase_candidates": [],
+    "undeclared_external_hosts": [],
+    "security_scan": {"skipped": false, "forced": false, "checks_skipped": [], "reason": null}
+  },
+  "findings": [],
+  "orphaned_resource_files_confirmed": [],
+  "summary": "v4 resolves v3's one open finding (step 4's local-mapping instruction now names a concrete mechanism - clean.py's own --map flag - instead of an unactionable 'apply the table by hand') and goes further: canonical-schema mapping is now explicitly opt-in (only done when the user asks for it, not implied as a default part of cleaning), and doing it locally is a single deterministic script invocation rather than free-form manual header rewriting, with the external service demoted to an explicit-request-only path. No findings remain; the two structural-check candidates (Bash declared-but-unreferenced, missing optional sections) are the same pre-existing false positive/info-level items dismissed in every prior version."
+}
