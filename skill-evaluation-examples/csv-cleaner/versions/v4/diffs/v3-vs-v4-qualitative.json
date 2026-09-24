@@ -1,0 +1,54 @@
+{
+  "mode": "qualitative",
+  "old_path": "skill-evaluation-examples\\csv-cleaner\\versions\\v3\\reports\\review.json",
+  "new_path": "skill-evaluation-examples\\csv-cleaner\\versions\\v4\\reports\\review.json",
+  "old_skill_name": "csv-cleaner",
+  "new_skill_name": "csv-cleaner",
+  "overall_verdict": {
+    "old": "pass_with_suggestions",
+    "new": "pass",
+    "changed": true
+  },
+  "category_scores": {
+    "compliance": {
+      "old": "pass",
+      "new": "pass",
+      "changed": false
+    },
+    "description_and_triggering": {
+      "old": "pass",
+      "new": "pass",
+      "changed": false
+    },
+    "safety": {
+      "old": "pass",
+      "new": "pass",
+      "changed": false
+    },
+    "structure_and_progressive_disclosure": {
+      "old": "pass",
+      "new": "pass",
+      "changed": false
+    },
+    "writing_style_and_content": {
+      "old": "minor",
+      "new": "pass",
+      "changed": true
+    }
+  },
+  "new_findings": [],
+  "resolved_findings": [
+    {
+      "id": "F1",
+      "category": "writing_style_and_content",
+      "severity": "minor",
+      "location": "SKILL.md:32 (Workflow step 4)",
+      "issue": "Step 4 (the fix for v2's F3) now gives an explicit rename instruction, but still doesn't say which mechanism performs the rename and re-save. Steps 1 and 3 both name a concrete command (`python3 scripts/clean.py ...`, `curl ...`); step 4 just says to 'apply the table yourself... rename it... then re-save the file' without saying whether that happens via a shell one-liner (which would need `Bash`, already declared), a text/file-edit tool, or manual reconstruction of the CSV.",
+      "current_text": "4. If the user doesn't want header names sent to the external service (step 3), apply `references/mapping.md`'s table yourself instead: for each header in the cleaned output that matches a listed variant, rename it to the corresponding canonical name, then re-save the file.",
+      "suggested_rewrite": "4. If the user doesn't want header names sent to the external service (step 3), apply `references/mapping.md`'s table yourself: read the cleaned CSV's header row, rename each header that matches a listed variant to its canonical name, and write the file back out in place (e.g. via a short Python/`csv` snippet run through Bash, consistent with step 1's tooling) rather than reconstructing it by hand.",
+      "why_it_matters": "Without a named mechanism, two runs of this step could produce different results (a careful full rewrite of the CSV vs. an ad hoc partial edit that corrupts quoting/delimiters) purely because Claude picked a different way to 're-save the file' each time \u2014 the same run-to-run inconsistency risk the original F3 finding was raised over, just one level down."
+    }
+  ],
+  "severity_changed_findings": [],
+  "unchanged_findings_count": 0
+}

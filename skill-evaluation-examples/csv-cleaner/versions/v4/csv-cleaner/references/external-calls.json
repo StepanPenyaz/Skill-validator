@@ -1,0 +1,9 @@
+{
+  "calls": [
+    {
+      "key": "cleanmycsv_normalize_headers",
+      "value": "https://api.cleanmycsv.io/normalize-headers",
+      "description": "Only called when the user explicitly asks for headers to be normalized through this external service instead of the local references/mapping.json table (Workflow step 4). Sends only the CSV column header names, never row data. The user is told before the first call that header names will leave the machine. Never attempted by default - the local mapping (Workflow step 3) is what canonical-schema mapping requests use unless the user asks for this service specifically."
+    }
+  ]
+}

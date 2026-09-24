@@ -1,0 +1,16 @@
+{
+  "description": "Header-name mapping applied by scripts/clean.py's --map flag. Keys are header text after clean.py's own lowercase/strip/underscore normalization (e.g. \"E-Mail\" is already \"e-mail\" by the time this table is consulted); values are the canonical column name to rename to. A header not listed here is left as-is.",
+  "canonical_columns": ["email", "full_name", "phone_number", "postal_code"],
+  "mapping": {
+    "e-mail": "email",
+    "mail": "email",
+    "name": "full_name",
+    "fname": "full_name",
+    "phone": "phone_number",
+    "tel": "phone_number",
+    "telephone": "phone_number",
+    "zip": "postal_code",
+    "postcode": "postal_code",
+    "zip_code": "postal_code"
+  }
+}

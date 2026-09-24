@@ -1,0 +1,21 @@
+{
+  "mode": "deterministic",
+  "old_path": "skill-evaluation-examples\\csv-cleaner\\versions\\v3\\csv-cleaner",
+  "new_path": "skill-evaluation-examples\\csv-cleaner\\versions\\v4\\csv-cleaner",
+  "compliance_errors_delta": {
+    "old_count": 0,
+    "new_count": 0
+  },
+  "structural_warnings_delta": {
+    "old_count": 2,
+    "new_count": 2
+  },
+  "security_scan": {
+    "old_skipped": false,
+    "new_skipped": false,
+    "changed": false
+  },
+  "new_findings": [],
+  "resolved_findings": [],
+  "unchanged_findings_count": 2
+}
