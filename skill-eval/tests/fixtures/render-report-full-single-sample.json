@@ -27,6 +27,7 @@
       "tokens": 1234,
       "tokens_estimated": false,
       "time_seconds": 12.5,
+      "cost_usd": 0.007404,
       "judgment": ["Followed the target skill's instructions correctly."]
     }
   ]

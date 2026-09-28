@@ -2,7 +2,7 @@
 name: skill-eval
 description: Statically reviews a Claude Agent Skill's SKILL.md and bundled resources against best-practice conventions (frontmatter compliance, structure, writing style, safety), then runs it against real tasks and reports what it actually cost to do so — model used, token count, wall-clock time — alongside a short qualitative judgment of how the run went. Use this whenever the user asks to review, audit, lint, validate, critique, grade, or get feedback on a skill or SKILL.md file ("check this skill", "is this SKILL.md any good", "what's wrong with my skill"), or to evaluate, benchmark, or measure a skill's runtime cost/behavior ("how much does this skill cost to run", "how does this skill perform on Haiku vs Sonnet"). Also use it to compare two versions of the same skill — the report covers both the structural/quality diff and the cost/behavior diff in that one case. Trigger even on casual phrasing, without the user saying "validate" or "evaluate" explicitly.
 metadata:
-  version: "1.2.0"
+  version: "1.3.0"
   maintained_by: "Claude Code Skill Evaluation project"
 ---
 
@@ -237,9 +237,20 @@ same Workflow, doubled, with a different step-4 renderer at the end.
      "capture failed" note for that row rather than a plain dash, so the
      gap is visible in the final report instead of silently guessed at or
      silently dropped (see `token-capture.md`'s Decision section).
+   - **Compute `cost_usd` from that model's tokens** using
+     `references/models_config.yaml`'s `pricing` table:
+     `tokens / 1_000_000 * pricing[<model>].blended_usd_per_million`. This
+     is a labeled estimate, not an exact bill line item — `subagent_tokens`
+     doesn't split input vs. output tokens, so the blended rate (the
+     midpoint of the model's published input/output prices — see that
+     file's own comment for why) is the best available approximation, the
+     same honesty-over-precision treatment as the token count itself. If
+     `tokens` is `null` (capture failed) or the model isn't in the pricing
+     table, report `cost_usd: null` for that row rather than guessing —
+     never a stop condition, same as the token-capture gap above.
    - Continue to step 3 once every model in the list has a captured
-     `{model, tokens (real, or null if capture failed), time_seconds,
-     transcript}`.
+     `{model, tokens (real, or null if capture failed), cost_usd (or null),
+     time_seconds, transcript}`.
 
 3. **Write a judgment for each run.** For each model's run from step 2,
    read that run's transcript/output and write 2-4 short bullet points —
@@ -280,8 +291,8 @@ same Workflow, doubled, with a different step-4 renderer at the end.
      `.blocked_categories`, `.category_scores`, and `.review_file` (the
      `<skill-name>-review.md` stage 1b already produced, pointed to rather
      than duplicated inline), `task_fixture_auto_generated`, and `runs[]`
-     with `model`/`tokens`/`tokens_estimated`/`time_seconds`/`judgment`),
-     write it to a temp file, and run:
+     with `model`/`tokens`/`tokens_estimated`/`cost_usd`/`time_seconds`/
+     `judgment`), write it to a temp file, and run:
 
      ```bash
      python3 scripts/render_report.py <input.json> --out <skill-name>-eval.md
@@ -296,11 +307,12 @@ same Workflow, doubled, with a different step-4 renderer at the end.
      a prominent warning, not folded quietly into the routine note. Then
      the static-check findings table and the qualitative summary (both
      from stage 1a/1b's output, per above), then one Markdown table, one
-     row per model: `Model Used | Number of Tokens | Time Spent | Claude's
-     Judgment`, judgment bullets rendered as a `<br>`-separated list
-     within the cell. **The model table is always rendered** — the run in
-     step 2 always happened regardless of what step 1 found, so there's
-     always something to show here.
+     row per model: `Model Used | Number of Tokens | Cost (USD) | Time
+     Spent | Claude's Judgment`, judgment bullets rendered as a
+     `<br>`-separated list within the cell, followed by a total-cost line
+     summed across every run that has a `cost_usd`. **The model table is
+     always rendered** — the run in step 2 always happened regardless of
+     what step 1 found, so there's always something to show here.
 
    **Two skill versions (comparative):**
 
@@ -313,15 +325,18 @@ same Workflow, doubled, with a different step-4 renderer at the end.
      for the latter — its own output, passed straight through, not
      re-derived by hand), `task_fixture_auto_generated`, and `runs[]` with
      `model` and per-model `old`/`new` objects, each
-     `tokens`/`tokens_estimated`/`time_seconds`/`judgment`. Then run the
-     same `scripts/render_report.py <input.json> --out <old>-vs-<new>-eval.md`.
+     `tokens`/`tokens_estimated`/`cost_usd`/`time_seconds`/`judgment`. Then
+     run the same `scripts/render_report.py <input.json> --out <old>-vs-<new>-eval.md`.
    - The rendered report leads with the structural/qualitative diff
      (`scripts/diff_reviews.py`'s own Markdown rendering, embedded as a
      subsection — not reimplemented here), then one wide table, one row
-     per model, old vs. new side by side with a computed delta for tokens
-     and time, and separate old/new judgment columns — a reader compares
-     the row's two halves directly instead of cross-referencing two
-     separate reports by hand.
+     per model, old vs. new side by side with a computed delta for tokens,
+     cost, and time, and separate old/new judgment columns — a reader
+     compares the row's two halves directly instead of cross-referencing
+     two separate reports by hand — followed by a total-cost line (old
+     total, new total, and a delta when both totals are present) each
+     summed independently over whichever runs have a `cost_usd` on that
+     side.
 
    - Save the file (`<skill-name>-eval.md` or `<old>-vs-<new>-eval.md`),
      to `/mnt/user-data/outputs/` when that convention exists in the
@@ -527,8 +542,9 @@ same Workflow, doubled, with a different step-4 renderer at the end.
 - `references/severity_config.yaml` — the `check_id -> severity` table
   `structural_check.py` reads at run time; if a run's severities look off,
   check this file (not the script) first.
-- `references/models_config.yaml` — the editable `default_models` list;
-  see Decision Guidelines for how to extend it, persistently or per-run.
+- `references/models_config.yaml` — the editable `default_models` list
+  (see Decision Guidelines for how to extend it, persistently or per-run)
+  and the `pricing` table Workflow step 2 uses to compute `cost_usd`.
 - `references/task-authoring.md` — the `tests/fixtures/tasks/<skill-name>.yaml`
   format and how to write one. See Workflow step 2.
 - `references/token-capture.md` — why the "Number of Tokens" column is a

@@ -138,6 +138,7 @@
         "tokens": 10000,
         "tokens_estimated": false,
         "time_seconds": 20.0,
+        "cost_usd": 0.06,
         "judgment": [
           "Old version handled the happy path but missed the edge case."
         ]
@@ -146,6 +147,7 @@
         "tokens": 12000,
         "tokens_estimated": false,
         "time_seconds": 22.5,
+        "cost_usd": 0.072,
         "judgment": [
           "New version correctly handles the edge case the old one missed."
         ]
@@ -157,6 +159,7 @@
         "tokens": null,
         "tokens_estimated": false,
         "time_seconds": 15.0,
+        "cost_usd": null,
         "judgment": [
           "Token capture failed for this call."
         ]
@@ -165,6 +168,7 @@
         "tokens": 9000,
         "tokens_estimated": false,
         "time_seconds": 16.0,
+        "cost_usd": 0.027,
         "judgment": [
           "Ran cleanly on the new version."
         ]
