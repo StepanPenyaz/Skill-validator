@@ -4,6 +4,57 @@ All notable changes to the `skill-eval` skill are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 versioning follows [SemVer](https://semver.org/).
 
+## [1.1.0] — 2026-09-28
+
+### Changed (breaking: run behavior)
+- **The pipeline no longer stops on a Blocker/`blocked` static-review
+  result.** Previously, `compliance_errors` from stage 1a or an
+  `overall_verdict` of `blocked` from stage 1b would halt the Workflow
+  before the target skill ever ran — no report was produced at all. Now
+  both stages always run, the target skill always gets executed in step 2
+  regardless of what they found, and the final report always gets
+  rendered — with the Blocker/`blocked` result carried forward and shown
+  as a prominent warning (`render_report.py`'s `gate_check` handling: a
+  distinct callout block listing the actual `compliance_errors` entries
+  and/or blocked categories, not folded into the routine "passed,
+  evaluation proceeded" note). Motivation: a report with real statistics
+  is always more useful than no report at all, and a Blocker is exactly
+  the kind of thing a reader needs surfaced clearly, not hidden behind a
+  refusal to run.
+- **A missing task fixture no longer pauses the run to ask.** Workflow
+  step 2 now authors `tests/fixtures/tasks/<skill-name>.yaml` itself,
+  following `references/task-authoring.md`'s methodology exactly (same
+  sourcing priority: description/"When to Use", `CHANGELOG.md`-driven
+  change coverage, a "When NOT to Use" boundary case), saves it, and
+  continues the run with it. This is not the same as the old "never
+  invent tasks on the fly" rule, which was about *unsaved, improvised*
+  prompts defeating the point of a frozen fixture — an auto-authored
+  fixture is saved to disk and frozen from that point on exactly like a
+  hand-authored one; only the "who wrote it, and whether the run pauses to
+  ask first" part changed. The final report notes when a run's fixture was
+  auto-generated (`task_fixture_auto_generated: true` in
+  `render_report.py`'s input shape) so a later reader knows to go look at
+  what it actually asked before relying on it for a comparison.
+- **A per-model token-capture failure no longer aborts the whole run.**
+  If `subagent_tokens` is absent from the `Agent` tool's result for one
+  model's call (see `references/token-capture.md`), that model's `tokens`
+  is now recorded as `null` and the remaining models still get evaluated;
+  `render_report.py`'s `format_tokens` renders an explicit "capture
+  failed" note for that row instead of a plain dash (which could misread
+  as "no run happened") or a silent fallback to the discredited
+  self-reported estimate.
+
+### Added
+- `scripts/render_report.py`: `gate_check.stage_1a.compliance_errors` and
+  `gate_check.stage_1b.blocked_categories` in the input shape, rendered as
+  a prominent warning block when either is non-empty/`blocked`;
+  `task_fixture_auto_generated` in the input shape, rendered as a note
+  when `true`. Two new fixtures (`render-report-blocked-sample.json`,
+  `render-report-missing-tokens-sample.json`) and 3 new regression checks
+  covering both, plus the existing sample's unchanged rendering (backward
+  compatible — no `compliance_errors`/`blocked_categories`/
+  `task_fixture_auto_generated` keys renders exactly as before).
+
 ## [1.0.0] — 2026-09-28
 
 ### Changed (merge, breaking)

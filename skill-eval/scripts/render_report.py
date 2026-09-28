@@ -5,7 +5,7 @@ Markdown report: one table, one row per model tested.
 
 Purely mechanical, like this skill's own scripts/generate_static_report.py: by
 the time this runs, Workflow steps 1-3 have already collected everything
-it needs (the gate-check result, model/tokens/time per run, and a
+it needs (the static-review result, model/tokens/time per run, and a
 judgment Claude wrote in step 3) — this script does no judging of its
 own, just formatting. No model call, no PyYAML dependency (input is JSON).
 
@@ -16,9 +16,10 @@ Usage:
 {
   "skill_name": "example-skill",
   "gate_check": {
-    "stage_1a": {"structural_warnings_count": 2},
-    "stage_1b": {"overall_verdict": "pass_with_suggestions"}
+    "stage_1a": {"structural_warnings_count": 2, "compliance_errors": []},
+    "stage_1b": {"overall_verdict": "pass_with_suggestions", "blocked_categories": []}
   },
+  "task_fixture_auto_generated": false,
   "runs": [
     {
       "model": "sonnet",
@@ -31,11 +32,24 @@ Usage:
 }
 
 `gate_check` is optional context (renders as a blockquote note above the
-table) but always present in real use — Workflow step 1 always ran, and
-passed, before step 4 is ever reached; a failed gate check stops the whole
-Workflow before any report is rendered. `runs[].tokens_estimated` controls
-whether the "Number of Tokens" cell is labeled `(estimated)` — see
-references/token-capture.md for why it's an estimate today.
+table) but always present in real use. The static review no longer stops
+the run on a Blocker/`blocked` verdict (see SKILL.md's Rules) — Workflow
+always proceeds to step 2 and this report always gets rendered, so
+`stage_1a.compliance_errors` (non-empty) and a `stage_1b.overall_verdict`
+of `blocked` are real possibilities here, not just theoretical. When
+either is present, the note renders as a prominent warning instead of the
+routine "passed, evaluation proceeded" note, listing the actual entries/
+categories so the report stays self-contained without re-running the
+static review. `stage_1b.blocked_categories` is optional detail for that
+warning (which `category_scores` entries were `blocker`).
+
+`task_fixture_auto_generated: true` renders a note that no task fixture
+existed yet for this skill and one was authored automatically this run —
+see SKILL.md Workflow step 2 and references/task-authoring.md.
+
+`runs[].tokens_estimated` controls whether the "Number of Tokens" cell is
+labeled `(estimated)` — see references/token-capture.md for why it's an
+estimate today.
 
 Prints Markdown to stdout, or writes it to --out if given.
 """
@@ -73,8 +87,13 @@ def format_time(seconds):
 
 
 def format_tokens(tokens, estimated):
+    """`tokens is None` means the `Agent` tool's result didn't carry
+    `subagent_tokens` for this call (see references/token-capture.md) — a
+    real gap worth calling out, not the same as "zero" or "not
+    applicable," so it renders as an explicit unknown rather than silently
+    reading as a dash a reader could misattribute to "no run happened"."""
     if tokens is None:
-        return "-"
+        return "unknown (capture failed — see references/token-capture.md)"
     formatted = f"{tokens:,}"
     return f"~{formatted} (estimated)" if estimated else formatted
 
@@ -86,25 +105,61 @@ def format_judgment(bullets):
 
 
 def render_gate_check_note(gate_check):
-    """Always shown, even though every real report implies the gate check
-    passed (a failed gate check stops the Workflow before step 4 runs) —
-    the report should be self-contained, not require re-running gate mode
-    to know it happened at all. See skill-eval/SKILL.md Decision
-    Guidelines on surfacing a non-blocking gate result."""
+    """Always shown when gate_check is present — the report should be
+    self-contained, not require re-running the static review to know what
+    it found. A Blocker/`blocked` result no longer stops the Workflow (see
+    SKILL.md's Rules), so this renders as a prominent warning instead of
+    silently folding into the routine note, rather than disappearing."""
     if not gate_check:
         return ""
-    lines = ["> **Static review** (gate check) — passed, evaluation proceeded:"]
     stage_1a = gate_check.get("stage_1a") or {}
+    stage_1b = gate_check.get("stage_1b") or {}
+    compliance_errors = stage_1a.get("compliance_errors") or []
+    verdict = stage_1b.get("overall_verdict")
+    blocked_categories = stage_1b.get("blocked_categories") or []
+    is_blocked = bool(compliance_errors) or verdict == "blocked"
+
+    if is_blocked:
+        lines = ["> **STATIC REVIEW FOUND BLOCKING ISSUE(S) — evaluation proceeded anyway:**"]
+        if compliance_errors:
+            lines.append(f"> - Stage 1a (deterministic): {len(compliance_errors)} compliance error(s):")
+            for err in compliance_errors:
+                lines.append(f">   - {esc(err)}")
+        if verdict == "blocked":
+            if blocked_categories:
+                cats = ", ".join(esc(c) for c in blocked_categories)
+                lines.append(f"> - Stage 1b (qualitative): `overall_verdict` = `blocked` ({cats}).")
+            else:
+                lines.append("> - Stage 1b (qualitative): `overall_verdict` = `blocked`.")
+        lines.append(">")
+        lines.append(
+            "> The run below still happened against a skill with unresolved blocking "
+            "issue(s) — read the results with that in mind."
+        )
+        return "\n".join(lines) + "\n"
+
+    lines = ["> **Static review** (gate check) — passed, evaluation proceeded:"]
     warnings = stage_1a.get("structural_warnings_count", 0)
     if warnings:
         lines.append(f"> - Stage 1a (deterministic): {warnings} structural warning(s), not blocking.")
     else:
         lines.append("> - Stage 1a (deterministic): zero structural warnings.")
-    stage_1b = gate_check.get("stage_1b") or {}
-    verdict = stage_1b.get("overall_verdict")
     if verdict:
         lines.append(f"> - Stage 1b (qualitative): `overall_verdict` = `{verdict}`, not blocking.")
     return "\n".join(lines) + "\n"
+
+
+def render_fixture_note(data):
+    """Surfaces that Workflow step 2 had to author tests/fixtures/tasks/
+    <skill-name>.yaml on the fly this run, instead of that fact silently
+    disappearing once the run completes — see SKILL.md Workflow step 2."""
+    if not data.get("task_fixture_auto_generated"):
+        return ""
+    return (
+        "> No task fixture existed yet for this skill — one was authored "
+        "automatically this run (see `references/task-authoring.md`) and "
+        "saved for future reruns/comparisons.\n"
+    )
 
 
 def render_markdown(data):
@@ -116,6 +171,10 @@ def render_markdown(data):
     gate_note = render_gate_check_note(data.get("gate_check"))
     if gate_note:
         lines.append(gate_note)
+
+    fixture_note = render_fixture_note(data)
+    if fixture_note:
+        lines.append(fixture_note)
 
     if not runs:
         lines.append("No runs recorded.")
