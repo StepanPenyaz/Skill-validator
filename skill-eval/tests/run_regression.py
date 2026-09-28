@@ -305,6 +305,26 @@ def _():
     assert_in("No runs recorded.", stdout, "empty-runs message")
 
 
+@check("render_report.py: a missing token count renders an explicit 'capture failed' note, not a plain dash or silent estimate, and other rows still render")
+def _():
+    stdout, returncode, stderr = run(SCRIPTS / "render_report.py", FIXTURES / "render-report-missing-tokens-sample.json")
+    assert_eq(returncode, 0, f"exit code (stderr: {stderr.strip()})")
+    assert_in("1,500", stdout, "the sonnet row's real token count still renders")
+    assert_in("unknown (capture failed", stdout, "haiku row's missing tokens rendered as an explicit gap")
+    assert_in("haiku", stdout, "haiku row still present despite the missing token count")
+
+
+@check("render_report.py: a Blocker/blocked result renders a prominent warning, not a silent pass, and the run table still appears")
+def _():
+    stdout, returncode, stderr = run(SCRIPTS / "render_report.py", FIXTURES / "render-report-blocked-sample.json")
+    assert_eq(returncode, 0, f"exit code (stderr: {stderr.strip()})")
+    assert_in("STATIC REVIEW FOUND BLOCKING ISSUE(S)", stdout, "prominent blocked warning")
+    assert_in("Name 'BadSkill_v2' is not kebab-case.", stdout, "compliance error text")
+    assert_in("`overall_verdict` = `blocked` (safety)", stdout, "blocked category detail")
+    assert_in("sonnet", stdout, "run table still rendered despite the Blocker")
+    assert_in("No task fixture existed yet for this skill", stdout, "auto-generated-fixture note")
+
+
 # ============================================================
 # Self-check and packaging
 # ============================================================

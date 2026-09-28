@@ -1,0 +1,20 @@
+{
+  "skill_name": "blocked-skill",
+  "gate_check": {
+    "stage_1a": {
+      "structural_warnings_count": 2,
+      "compliance_errors": ["Name 'BadSkill_v2' is not kebab-case."]
+    },
+    "stage_1b": {"overall_verdict": "blocked", "blocked_categories": ["safety"]}
+  },
+  "task_fixture_auto_generated": true,
+  "runs": [
+    {
+      "model": "sonnet",
+      "tokens": 4321,
+      "tokens_estimated": false,
+      "time_seconds": 30.0,
+      "judgment": ["Ran anyway despite the Blocker, per the non-blocking Workflow."]
+    }
+  ]
+}

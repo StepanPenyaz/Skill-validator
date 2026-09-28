@@ -2,7 +2,7 @@
 name: skill-eval
 description: Statically reviews a Claude Agent Skill's SKILL.md and bundled resources against best-practice conventions (frontmatter compliance, structure, writing style, safety), then runs it against real tasks and reports what it actually cost to do so — model used, token count, wall-clock time — alongside a short qualitative judgment of how the run went. Use this whenever the user asks to review, audit, lint, validate, critique, grade, or get feedback on a skill or SKILL.md file ("check this skill", "is this SKILL.md any good", "what's wrong with my skill"), or to evaluate, benchmark, or measure a skill's runtime cost/behavior ("how much does this skill cost to run", "how does this skill perform on Haiku vs Sonnet"). Also use it to compare two versions of the same skill — the report covers both the structural/quality diff and the cost/behavior diff in that one case. Trigger even on casual phrasing, without the user saying "validate" or "evaluate" explicitly.
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
   maintained_by: "Claude Code Skill Evaluation project"
 ---
 
@@ -55,13 +55,16 @@ table row — the comparison is made by reading the row, not by a computed
 ratio.
 
 `skill-eval` runs its own static review against the target skill before
-doing anything else — both gate mode and, if that passes, full review mode
-too — and refuses to proceed if either comes back blocked. There is no
-point measuring the runtime cost of a skill that would fail to parse or
-ship, and a hard compliance error isn't the only way a skill can be broken:
-some blocking problems (a safety-relevant pattern that's an actual problem
-in context, not just a regex candidate) only surface once a model actually
-reads the skill. See Workflow.
+doing anything else — both gate mode and full review mode. Neither stage
+stops the pipeline, even on a Blocker or a `blocked` verdict: the full run
+(cost/behavior layer included) always happens and a report is always
+produced, with whatever the static review found carried forward and
+surfaced prominently rather than silently dropped or used as a reason to
+withhold the report. A hard compliance error isn't the only way a skill
+can be broken — some problems (a safety-relevant pattern that's an actual
+problem in context, not just a regex candidate) only surface once a model
+actually reads the skill — but either way, the answer is "run it and say
+so clearly," not "refuse to run it." See Workflow.
 
 # When to Use
 
@@ -98,8 +101,11 @@ reads the skill. See Workflow.
 # Workflow
 
 1. **Run the static review — two stages, cheapest first.** Before doing
-   anything else, review the target skill directory, in this order,
-   stopping at the first stage that fails:
+   anything else, review the target skill directory, in this order. A
+   Blocker/`blocked` result at either stage is **never a stop condition**
+   for the pipeline as a whole — see Rules — it's always carried forward
+   into the final report instead, prominently, so the report is always
+   produced and always shows real statistics even for a broken skill.
 
    1a. **Deterministic stage (gate mode).**
 
@@ -114,13 +120,11 @@ reads the skill. See Workflow.
        candidates, imperative marker counts, declared-vs-referenced tool
        usage, and security pattern candidates). If `compliance_errors` is
        non-empty (any Blocker-severity finding — malformed frontmatter, a
-       hardcoded secret, etc.) → **stop immediately**. Report the failure
-       to the user, quoting the `compliance_errors` entries verbatim, and
-       do not proceed to stage 1b or to running the target skill at all.
-       If empty → continue to stage 1b. `structural_warnings` (Warning/
-       Info-severity findings) are **not** blocking — see Decision
-       Guidelines for what to do with them instead of silently dropping
-       them.
+       hardcoded secret, etc.), note it (quote the entries verbatim) and
+       **continue to stage 1b anyway** — do not stop the pipeline here.
+       `structural_warnings` (Warning/Info-severity findings) are likewise
+       **not** blocking — see Decision Guidelines for what to do with both
+       instead of silently dropping them.
 
        `dangerous_shell_pattern_candidates`, `prompt_injection_phrase_candidates`,
        and `undeclared_external_hosts` are skipped by default (empty lists)
@@ -134,7 +138,9 @@ reads the skill. See Workflow.
        If the user only wants this deterministic layer (see Decision
        Guidelines), it's fine to stop here and present gate mode's output
        (or `scripts/generate_static_report.py`'s Markdown rendering) as a
-       complete answer — not a preview of more to come.
+       complete answer — not a preview of more to come. That's a scope
+       choice the user made, not the same thing as the pipeline stopping
+       itself on a Blocker.
 
    1b. **Qualitative stage (full review mode).** Skipped only when the
        user explicitly asked for gate mode alone. Otherwise: open the
@@ -153,14 +159,12 @@ reads the skill. See Workflow.
        files following `references/schema.md` exactly:
        `<skill-name>-review.json` and `<skill-name>-review.md`. If the
        resulting `overall_verdict` is `blocked` (any `category_scores`
-       entry is `blocker`) → **stop immediately**. Report which category
-       was blocked and why, and do not proceed to running the target
-       skill. If not blocked → continue to step 2.
+       entry is `blocker`), note which category and why, and **continue to
+       step 2 anyway** — do not stop the pipeline here either.
 
    Run 1a before 1b, not the other way around or both at once: 1a is
    free (no model call) and catches most breakage, so there's no reason
-   to spend a model call on 1b for a skill that was already going to fail
-   1a.
+   to spend a model call on 1b before knowing what 1a already found.
 
 2. **Run the target skill, once per model.** Do this after step 1 passes,
    never before.
@@ -170,8 +174,21 @@ reads the skill. See Workflow.
      only — see Decision Guidelines.
    - **Load the task fixture**: `tests/fixtures/tasks/<skill-name>.yaml`
      (format: `references/task-authoring.md`). If it doesn't exist yet for
-     this target skill, that's a stop condition too — see Decision
-     Guidelines, don't invent tasks on the fly instead.
+     this target skill, **author one now**, following
+     `references/task-authoring.md`'s methodology exactly (pull a
+     happy-path prompt from the target skill's own description/"When to
+     Use", a task exercising whatever its `CHANGELOG.md` most recently
+     changed, one "When NOT to Use" boundary case, 3-5 tasks as a starting
+     guideline), save it to `tests/fixtures/tasks/<skill-name>.yaml`, and
+     continue the run with it — don't stop to ask first. This is not the
+     same as improvising ad hoc prompts (see Rules): the fixture is
+     authored following the same methodology a human would use, written to
+     disk, and treated as frozen from that point on, exactly like a
+     manually-authored one — the only difference is who wrote it and that
+     the run doesn't pause to wait for approval first. Note in the final
+     report that the fixture was auto-generated this run (see Workflow
+     step 4) so the reader knows to look at it before relying on a
+     rerun/comparison.
    - **For each model in the list, spawn one `Agent`-tool subagent directly
      from this top-level turn** (`model` parameter set to that model)
      covering *all* tasks from the fixture in a single conversation — not
@@ -200,12 +217,16 @@ reads the skill. See Workflow.
      for why this is a measured number, not an estimate, as long as the
      call was made the way the first bullet above describes. Report it
      with `tokens_estimated: false`. If `subagent_tokens` is absent from
-     the result for some call, that's a stop-and-report condition for
-     this run, not a silent fallback to a self-reported estimate —
-     surface it to the user (see `token-capture.md`'s Decision section)
-     rather than guessing.
+     the result for some call, that's **never** a silent fallback to a
+     self-reported estimate, and never a reason to stop the whole run
+     either: record that model's `tokens` as unknown (`null`) and move on
+     to the remaining models — `render_report.py` renders an explicit
+     "capture failed" note for that row rather than a plain dash, so the
+     gap is visible in the final report instead of silently guessed at or
+     silently dropped (see `token-capture.md`'s Decision section).
    - Continue to step 3 once every model in the list has a captured
-     `{model, tokens (real), time_seconds, transcript}`.
+     `{model, tokens (real, or null if capture failed), time_seconds,
+     transcript}`.
 
 3. **Write a judgment for each run.** For each model's run from step 2,
    read that run's transcript/output and write 2-4 short bullet points —
@@ -237,23 +258,28 @@ reads the skill. See Workflow.
 
    - Assemble the collected data into the JSON shape
      `scripts/render_report.py`'s module docstring documents (`skill_name`,
-     `gate_check.stage_1a.structural_warnings_count`,
-     `gate_check.stage_1b.overall_verdict`, and `runs[]` with
-     `model`/`tokens`/`tokens_estimated`/`time_seconds`/`judgment`), write
-     it to a temp file, and run:
+     `gate_check.stage_1a.structural_warnings_count` and
+     `.compliance_errors`, `gate_check.stage_1b.overall_verdict` and
+     `.blocked_categories`, `task_fixture_auto_generated`, and `runs[]`
+     with `model`/`tokens`/`tokens_estimated`/`time_seconds`/`judgment`),
+     write it to a temp file, and run:
 
      ```bash
      python3 scripts/render_report.py <input.json> --out <skill-name>-eval.md
      ```
 
-   - The rendered report leads with the static-review result — both
-     stages, even though both necessarily passed to get this far — so the
-     report is self-contained and doesn't require re-running gate mode to
-     know it happened (see Decision Guidelines on why that context
-     shouldn't silently disappear). Then one Markdown table, one row per
-     model: `Model Used | Number of Tokens | Time Spent | Claude's
-     Judgment`, judgment bullets rendered as a `<br>`-separated list
-     within the cell.
+   - The rendered report leads with the static-review result — always,
+     regardless of whether it passed clean, found only non-blocking
+     warnings, or found a Blocker/`blocked` verdict — so the report is
+     self-contained and doesn't require re-running the static review to
+     know what happened (see Decision Guidelines on why that context
+     shouldn't silently disappear). A Blocker/`blocked` result renders as
+     a prominent warning, not folded quietly into the routine note. Then
+     one Markdown table, one row per model: `Model Used | Number of Tokens
+     | Time Spent | Claude's Judgment`, judgment bullets rendered as a
+     `<br>`-separated list within the cell. **The table is always
+     rendered** — the run in step 2 always happened regardless of what
+     step 1 found, so there's always something to show here.
    - Save the file as `<skill-name>-eval.md`, to `/mnt/user-data/outputs/`
      when that convention exists in the current environment, otherwise
      next to the target skill directory with the path given to the user
@@ -275,23 +301,28 @@ reads the skill. See Workflow.
 - **The static-review stages never execute or modify the skill being
   reviewed** — they only read `SKILL.md` and its bundled resources. Only
   step 2 (after both stages pass) actually runs the target skill.
-- **Never proceed past a failed static review, at either stage.** If step
-  1a's `compliance_errors` is non-empty, or step 1b's `overall_verdict` is
-  `blocked`, stop there — report the failure and do not run the target
-  skill. This is not optional or a judgment call: a skill with a
-  Blocker-level finding, deterministic or qualitative, shouldn't be run to
-  measure its cost or behavior, regardless of how the user phrased the
-  request.
+- **Never let a failed static review stop the pipeline, at either stage.**
+  Run to completion and always render a report — see Purpose requirement
+  that statistics are always shown. A Blocker-level finding, deterministic
+  or qualitative, is not a reason to withhold the run or the report; it's
+  a reason to make sure the report says so prominently (see Workflow step
+  4 and Decision Guidelines). This is not optional or a judgment call in
+  the other direction either: never quietly drop a `compliance_errors`
+  entry or a `blocked` verdict just because the run proceeded past it.
 - **Never skip straight to 1b, and never run it before 1a.** 1a is free
   and catches most breakage; running the model-requiring qualitative stage
-  first (or instead) wastes a model call on a skill that was already going
-  to fail the deterministic check.
-- **Never invent tasks on the fly.** If `tests/fixtures/tasks/<skill-name>.yaml`
-  doesn't exist yet for the target skill, stop and tell the user a task
-  fixture needs to be authored first (`references/task-authoring.md`)
-  rather than improvising prompts — an improvised task set defeats the
-  whole point of a fixed fixture (see "why a fixed fixture" in that file):
-  it wouldn't be the same task set on a rerun or a version comparison.
+  first (or instead) wastes a model call before knowing what 1a already
+  found.
+- **Never pause to ask before authoring a missing task fixture — but never
+  improvise ad hoc prompts instead of authoring one either.** If
+  `tests/fixtures/tasks/<skill-name>.yaml` doesn't exist yet for the
+  target skill, write one now, following `references/task-authoring.md`'s
+  methodology, save it to disk, and continue — don't stop the pipeline to
+  ask, and don't substitute unsaved, one-off prompts for it. An
+  unsaved/improvised task set defeats the whole point of a fixed fixture
+  (see "why a fixed fixture" in that file): it wouldn't be the same task
+  set on a rerun or a version comparison. Note in the final report that
+  the fixture was auto-generated this run (Workflow step 4).
 - **One subagent per model, covering every task — never one subagent per
   task.** Splitting by task would produce several transcripts per model
   instead of one, breaking step 3's "read that run's transcript" (singular)
@@ -331,22 +362,25 @@ reads the skill. See Workflow.
   expand a "just review this" request into a full run-and-cost pipeline,
   and don't silently shrink a "how much does this cost" request down to
   just the static review either.
-- **`structural_warnings` from stage 1a are not blocking — proceed, but
-  don't drop them.** A skill can have Warning/Info-severity findings (an
-  orphaned resource file, a missing `metadata.version`, a dangerous-
-  shell-pattern candidate) and still be safe to run. Continue past 1a, but
-  carry the warning count forward and surface it alongside the final
-  report — e.g. a short "Static review: N structural warning(s), not
-  blocking" note near the results table — so the user can see the target
-  skill wasn't perfectly clean even though evaluation proceeded, instead
-  of that information silently disappearing after stage 1a.
-- **A non-`blocked` verdict from stage 1b gets the same treatment.** If
-  full review mode comes back `needs_work` or `pass_with_suggestions`
-  (not `blocked`), proceed — but surface `overall_verdict` and the
-  category scores alongside the final report too, the same way stage 1a's
-  warnings are. A skill can be worth evaluating for cost/behavior while
-  still having writing-quality issues; don't let that context disappear
-  once stage 1b passes.
+- **Nothing stage 1a or 1b finds blocks the pipeline — everything they
+  find gets surfaced instead, at a severity that matches what it is.**
+  Three cases, all non-blocking, all carried forward into the final
+  report rather than silently dropped:
+  - `structural_warnings` from stage 1a (Warning/Info-severity — an
+    orphaned resource file, a missing `metadata.version`, a
+    dangerous-shell-pattern candidate): a short "Static review: N
+    structural warning(s), not blocking" note near the results table.
+  - A non-`blocked` `overall_verdict` from stage 1b (`needs_work` or
+    `pass_with_suggestions`): surface `overall_verdict` and the category
+    scores alongside the final report the same way.
+  - `compliance_errors` from stage 1a, or a `blocked` `overall_verdict`
+    from stage 1b: still run the target skill and render the report —
+    but this one gets the *prominent* warning treatment (Workflow step 4,
+    `render_report.py`'s `gate_check` handling), not folded into the
+    routine note, since it's a real Blocker, not just a style nit. A
+    skill worth evaluating for cost/behavior isn't the same claim as "this
+    skill has no problems" — don't let a Blocker read as if it were a
+    routine warning, and don't let it stop the run either.
 - **Extending the model list for a comparison.** Step 2's model list
   starts from `references/models_config.yaml`'s `default_models` (just
   `sonnet` out of the box). Two ways to add more, both valid, use the one
@@ -361,11 +395,13 @@ reads the skill. See Workflow.
   resulting list, each given the same task set and the same target skill
   — the model list is the only thing that varies between rows of the
   final table.
-- **No task fixture for this skill yet.** If
-  `tests/fixtures/tasks/<skill-name>.yaml` doesn't exist, don't guess at
-  tasks — tell the user, and offer to write one following
-  `references/task-authoring.md` (a manual/assisted step, per that file)
-  before continuing. Only proceed with the run once a real fixture exists.
+- **No task fixture for this skill yet.** Author one immediately following
+  `references/task-authoring.md`'s methodology, save it to
+  `tests/fixtures/tasks/<skill-name>.yaml`, and continue the run with it —
+  don't stop to ask, and don't improvise unsaved prompts instead (see
+  Rules). Mention in the final report that this run's fixture was
+  auto-generated (Workflow step 4), so anyone relying on it for a future
+  comparison knows to go look at what it actually asked.
 - If `fatal_error` is present in a script's output (e.g. path doesn't
   exist, PyYAML missing — install with
   `pip install pyyaml --break-system-packages` if needed) → fix the

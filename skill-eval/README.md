@@ -32,6 +32,13 @@ reads `subagent_tokens` straight off the `Agent` tool's own return
 metadata for each per-model run, no self-reporting or estimation
 involved — see [`references/token-capture.md`](references/token-capture.md).
 
+The run always goes to completion and always produces a report: a
+Blocker/`blocked` static-review result no longer stops the pipeline (it's
+surfaced as a prominent warning instead), a missing task fixture is
+authored automatically rather than pausing to ask, and a per-model token
+capture failure is recorded as an explicit gap for that one row rather
+than aborting the whole run — see `CHANGELOG.md`'s `[1.1.0]` entry.
+
 ## Two entry points in the static-review layer: gate mode and full review mode
 
 Pick based on what's actually being asked for; neither is a lesser version
@@ -164,13 +171,19 @@ Review this skill: <path-to-a-skill>
 `SKILL.md`'s Workflow then runs: static review (gate mode, then full review
 mode unless the user only wanted gate mode) → one subagent per resolved
 model, run against `tests/fixtures/tasks/<skill-name>.yaml` → a judgment
-per run → the final table, saved as `<skill-name>-eval.md`. If no task
-fixture exists yet for the target skill, it stops and asks before
-inventing one on the fly — see "Adding a task fixture" below. See
+per run → the final table, saved as `<skill-name>-eval.md`. The run always
+goes to completion and the report always gets rendered, whatever the
+static review found: a Blocker or a `blocked` verdict is surfaced as a
+prominent warning in the report rather than stopping the pipeline. If no
+task fixture exists yet for the target skill, one is authored automatically
+(same methodology as a hand-authored one, see "Adding a task fixture"
+below) and the run continues with it rather than pausing to ask — the
+report notes that it was auto-generated. See
 [`EXAMPLE-RESULTS.md`](EXAMPLE-RESULTS.md) for what a real run of the full
 pipeline looked like, output included (from before the merge, when the
-static-review layer was invoked as a separate `skill-review` skill — the
-underlying mechanics are unchanged).
+static-review layer was invoked as a separate `skill-review` skill and a
+Blocker/missing fixture still stopped the run — both mechanics changed
+since; see `CHANGELOG.md`).
 
 ## Models configuration
 
@@ -190,9 +203,11 @@ model is the only thing that varies between rows of the final table.
 
 ## Adding a task fixture for a new skill
 
-`skill-eval` won't invent tasks for a target skill it doesn't already
-have a fixture for — see `references/task-authoring.md` for the full
-format and methodology; the short version:
+`skill-eval` authors a task fixture itself, following the methodology
+below, when a target skill doesn't already have one — it doesn't pause to
+ask first (see `CHANGELOG.md`'s `[1.1.0]` entry). See
+`references/task-authoring.md` for the full format and methodology; the
+short version, same one the auto-authoring step follows:
 
 1. Create `tests/fixtures/tasks/<skill-name>.yaml` with 3-5 `{id, prompt,
    source}` entries.
@@ -202,7 +217,10 @@ format and methodology; the short version:
    about to compare two versions), and one "When NOT to Use" boundary
    case.
 3. Treat the file as frozen once it's been used in a real comparison —
-   see "Reproducibility" below for why.
+   see "Reproducibility" below for why. This applies whether the fixture
+   was hand-authored or auto-generated on a prior run — a run that
+   auto-generates a fixture notes that fact in its report, precisely so a
+   later reader knows to go look at what got frozen.
 
 `tests/fixtures/tasks/skill-review.yaml` and `tests/fixtures/tasks/csv-cleaner.yaml`
 are the worked examples so far; skim one alongside `task-authoring.md` for

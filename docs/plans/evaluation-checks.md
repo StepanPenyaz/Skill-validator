@@ -9,11 +9,19 @@
 > static-review layer is now `skill-eval`'s Workflow step 1, and every
 > `skill-review/...` path below now lives under `skill-eval/...` instead (e.g.
 > `skill-review/references/severity_config.yaml` → `skill-eval/references/severity_config.yaml`).
-> This plan's premise in point 1 ("skill-eval already refuses to proceed on any
-> Blocker") is also being revisited separately — see that changelog entry's
-> "what did not change" note. Re-derive the exact paths/wording against the
-> current `skill-eval/` layout before implementing any of this, rather than
-> assuming the two-skill structure described below still holds.
+>
+> **Also stale since `[1.1.0]`:** this plan's premise in point 1 ("skill-eval
+> already refuses to proceed on any Blocker, so this reuses that existing gate")
+> no longer holds — `skill-eval` now runs to completion and always renders a
+> report regardless of any Blocker/`blocked` finding, surfacing it as a
+> prominent warning instead of stopping. A future "evaluation criteria doc is
+> a hard precondition failure" check would need its own non-blocking
+> presentation (a prominent report warning, matching how `compliance_errors`
+> is now handled), not the old hard-stop behavior this point assumed.
+> Re-derive the exact paths/wording/blocking-model against the current
+> `skill-eval/` layout before implementing any of this, rather than assuming
+> either the two-skill structure or the old stop-on-Blocker behavior still
+> holds.
 
 ## Context
 

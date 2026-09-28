@@ -103,8 +103,12 @@ value for that call and reports it as a real number —
 If a future run's `Agent` call somehow doesn't carry `subagent_tokens` in
 its result (e.g. because the call went through a `Workflow` script's
 `agent()` wrapper instead of a direct top-level `Agent` call, which is
-still unconfirmed — see above), that is a stop-and-report condition for
-step 2, not a silent fallback to the old estimate: report the gap to the
-user rather than guessing again, since quietly reintroducing the estimate
-is exactly how this stayed unfixed through two prior confirmations already
-on record.
+still unconfirmed — see above), that is never a silent fallback to the old
+estimate: report the gap in the final table (see `scripts/render_report.py`'s
+`format_tokens`, which renders an explicit "capture failed" note instead of
+a plain dash) rather than guessing again, since quietly reintroducing the
+estimate is exactly how this stayed unfixed through two prior confirmations
+already on record. It's also not a reason to stop the whole run — record
+that one model's `tokens` as `null` and continue evaluating the rest of the
+model list, per SKILL.md's "run to completion, statistics always shown"
+requirement.
