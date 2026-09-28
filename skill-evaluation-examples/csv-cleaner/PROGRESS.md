@@ -1,5 +1,12 @@
 # csv-cleaner — improvement progress
 
+> **Historical note:** this log predates the merge that folded
+> `skill-review` into `skill-eval` (see `skill-eval/CHANGELOG.md`'s
+> `[1.0.0]` entry) — `skill-review/scripts/diff_reviews.py` below now lives
+> at `skill-eval/scripts/diff_reviews.py`. Left as a record of what was run
+> at the time rather than rewritten; see `versions/README.md` for the
+> current paths and the newer comparative-report shortcut.
+
 Running log of the fix-and-rerun cycle for the `csv-cleaner` demo skill, one
 `skill-review` finding at a time. Each entry links to the version snapshot
 and, once a next version exists, the `diff_reviews.py` output between it and

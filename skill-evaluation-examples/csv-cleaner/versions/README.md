@@ -1,13 +1,22 @@
 # csv-cleaner — version history
 
+> **Note:** these snapshots predate the merge that folded `skill-review`
+> into `skill-eval` as its static-review layer (see
+> `skill-eval/CHANGELOG.md`'s `[1.0.0]` entry) — every `skill-review/...`
+> path below now lives under `skill-eval/...` instead. Also, since
+> `skill-eval`'s `[1.2.0]` entry, giving `skill-eval` two version
+> directories directly produces the comparative report ("Comparing two
+> versions" below) in one step, rather than running `diff_reviews.py` by
+> hand and reading the cost table separately.
+
 This directory tracks the improvement journey of the `csv-cleaner` demo skill
 as a series of numbered snapshots. Each `vN/` folder holds a **complete,
 self-contained skill directory** at `vN/csv-cleaner/` (`SKILL.md`,
-`scripts/`, `references/`) — exactly what `skill-review` expects as input,
-named to match its own `frontmatter.name` so gate mode doesn't flag a
-folder/name mismatch — plus a `reports/` subfolder with that version's full
-evaluation output, and (from v2 on) a `diffs/` subfolder with the
-`diff_reviews.py` output against the previous version:
+`scripts/`, `references/`) — exactly what `skill-eval`'s static-review layer
+expects as input, named to match its own `frontmatter.name` so gate mode
+doesn't flag a folder/name mismatch — plus a `reports/` subfolder with that
+version's full evaluation output, and (from v2 on) a `diffs/` subfolder with
+the `diff_reviews.py` output against the previous version:
 
 ```
 versions/
@@ -17,8 +26,8 @@ versions/
       scripts/
       references/
     reports/
-      structural-check.json   # gate mode: python skill-review/scripts/structural_check.py <dir>
-      static-report.md        # gate mode: python skill-review/scripts/generate_static_report.py
+      structural-check.json   # gate mode: python skill-eval/scripts/structural_check.py <dir>
+      static-report.md        # gate mode: python skill-eval/scripts/generate_static_report.py
       review.json             # full review mode (references/schema.md single-run shape)
       review.md               # full review mode, human-readable
   v2/
@@ -39,19 +48,26 @@ improvement process, read `versions/vN/csv-cleaner/SKILL.md` and
 ## Comparing two versions
 
 Because each `vN/csv-cleaner/` is a real skill directory, any pair can be
-diffed with skill-review's own tool, no manual comparison needed:
+diffed with `skill-eval`'s own `diff_reviews.py`, no manual comparison
+needed:
 
 ```bash
 # Deterministic diff (gate-mode findings, no model call):
-python skill-review/scripts/diff_reviews.py \
+python skill-eval/scripts/diff_reviews.py \
     skill-evaluation-examples/csv-cleaner/versions/v1/csv-cleaner \
     skill-evaluation-examples/csv-cleaner/versions/v2/csv-cleaner
 
 # Qualitative diff (full-review verdicts/findings):
-python skill-review/scripts/diff_reviews.py \
+python skill-eval/scripts/diff_reviews.py \
     skill-evaluation-examples/csv-cleaner/versions/v1/reports/review.json \
     skill-evaluation-examples/csv-cleaner/versions/v2/reports/review.json
 ```
+
+Or ask a Claude session with `skill-eval` available to compare the two
+version directories directly — since `[1.2.0]`, that produces both diffs
+above plus a side-by-side cost/judgment table in one comparative report,
+rather than running `diff_reviews.py` by hand and reading a separate cost
+table.
 
 See [`../PROGRESS.md`](../PROGRESS.md) for the running summary — status and
 diff of every version so far, from the current baseline to the final
