@@ -2,7 +2,7 @@
 name: skill-eval
 description: Statically reviews a Claude Agent Skill's SKILL.md and bundled resources against best-practice conventions (frontmatter compliance, structure, writing style, safety), then runs it against real tasks and reports what it actually cost to do so — model used, token count, wall-clock time — alongside a short qualitative judgment of how the run went. Use this whenever the user asks to review, audit, lint, validate, critique, grade, or get feedback on a skill or SKILL.md file ("check this skill", "is this SKILL.md any good", "what's wrong with my skill"), or to evaluate, benchmark, or measure a skill's runtime cost/behavior ("how much does this skill cost to run", "how does this skill perform on Haiku vs Sonnet"). Also use it to compare two versions of the same skill — the report covers both the structural/quality diff and the cost/behavior diff in that one case. Trigger even on casual phrasing, without the user saying "validate" or "evaluate" explicitly.
 metadata:
-  version: "1.1.0"
+  version: "1.2.0"
   maintained_by: "Claude Code Skill Evaluation project"
 ---
 
@@ -100,12 +100,25 @@ so clearly," not "refuse to run it." See Workflow.
 
 # Workflow
 
+**Determine the mode first: single skill, or two versions to compare.**
+Everything below is written for one target skill directory. When the user
+instead gives two (an old and a new version of the same skill), the whole
+Workflow runs for **both** directories — steps 1-3 happen twice, once per
+version, sharing the same model list and the same task fixture (see
+Decision Guidelines on why the fixture must be identical for both) — and
+step 4 renders one **comparative** report instead of two separate ones:
+the structural/qualitative diff between the versions (via
+`scripts/diff_reviews.py`) plus a side-by-side cost/judgment table, old vs.
+new, per model. This is not a different tool or a separate ask — it's the
+same Workflow, doubled, with a different step-4 renderer at the end.
+
 1. **Run the static review — two stages, cheapest first.** Before doing
-   anything else, review the target skill directory, in this order. A
-   Blocker/`blocked` result at either stage is **never a stop condition**
-   for the pipeline as a whole — see Rules — it's always carried forward
-   into the final report instead, prominently, so the report is always
-   produced and always shows real statistics even for a broken skill.
+   anything else, review the target skill directory (each of the two, in
+   comparative mode), in this order. A Blocker/`blocked` result at either
+   stage is **never a stop condition** for the pipeline as a whole — see
+   Rules — it's always carried forward into the final report instead,
+   prominently, so the report is always produced and always shows real
+   statistics even for a broken skill.
 
    1a. **Deterministic stage (gate mode).**
 
@@ -251,16 +264,22 @@ so clearly," not "refuse to run it." See Workflow.
    nothing they could verify against the transcript.
 
 4. **Render the report.** By this point steps 1-3 have already collected
-   everything needed — the static-review result, and each run's model,
+   everything needed — the static-review result(s), and each run's model,
    token count, elapsed time, and judgment bullets. Rendering that into
-   the final table is purely mechanical, so it's a script, not another
-   judgment call:
+   the final report is purely mechanical, so it's a script, not another
+   judgment call. Two shapes, per the mode determined up front:
+
+   **Single skill:**
 
    - Assemble the collected data into the JSON shape
      `scripts/render_report.py`'s module docstring documents (`skill_name`,
-     `gate_check.stage_1a.structural_warnings_count` and
-     `.compliance_errors`, `gate_check.stage_1b.overall_verdict` and
-     `.blocked_categories`, `task_fixture_auto_generated`, and `runs[]`
+     `gate_check.stage_1a.structural_warnings_count`, `.compliance_errors`,
+     and `.findings` (stage 1a's full findings list, for the embedded
+     static-check table — reuses `scripts/generate_static_report.py`'s own
+     renderer, not reimplemented), `gate_check.stage_1b.overall_verdict`,
+     `.blocked_categories`, `.category_scores`, and `.review_file` (the
+     `<skill-name>-review.md` stage 1b already produced, pointed to rather
+     than duplicated inline), `task_fixture_auto_generated`, and `runs[]`
      with `model`/`tokens`/`tokens_estimated`/`time_seconds`/`judgment`),
      write it to a temp file, and run:
 
@@ -275,14 +294,39 @@ so clearly," not "refuse to run it." See Workflow.
      know what happened (see Decision Guidelines on why that context
      shouldn't silently disappear). A Blocker/`blocked` result renders as
      a prominent warning, not folded quietly into the routine note. Then
-     one Markdown table, one row per model: `Model Used | Number of Tokens
-     | Time Spent | Claude's Judgment`, judgment bullets rendered as a
-     `<br>`-separated list within the cell. **The table is always
-     rendered** — the run in step 2 always happened regardless of what
-     step 1 found, so there's always something to show here.
-   - Save the file as `<skill-name>-eval.md`, to `/mnt/user-data/outputs/`
-     when that convention exists in the current environment, otherwise
-     next to the target skill directory with the path given to the user
+     the static-check findings table and the qualitative summary (both
+     from stage 1a/1b's output, per above), then one Markdown table, one
+     row per model: `Model Used | Number of Tokens | Time Spent | Claude's
+     Judgment`, judgment bullets rendered as a `<br>`-separated list
+     within the cell. **The model table is always rendered** — the run in
+     step 2 always happened regardless of what step 1 found, so there's
+     always something to show here.
+
+   **Two skill versions (comparative):**
+
+   - Assemble the collected data into the comparative shape
+     `scripts/render_report.py`'s module docstring documents:
+     `"report_type": "comparative"`, `old_skill_name`/`new_skill_name`,
+     `structural_diff`/`qualitative_diff` (run `scripts/diff_reviews.py`
+     on the two skill directories for the former and, if both versions
+     produced a `<skill-name>-review.json` in step 1b, on those two files
+     for the latter — its own output, passed straight through, not
+     re-derived by hand), `task_fixture_auto_generated`, and `runs[]` with
+     `model` and per-model `old`/`new` objects, each
+     `tokens`/`tokens_estimated`/`time_seconds`/`judgment`. Then run the
+     same `scripts/render_report.py <input.json> --out <old>-vs-<new>-eval.md`.
+   - The rendered report leads with the structural/qualitative diff
+     (`scripts/diff_reviews.py`'s own Markdown rendering, embedded as a
+     subsection — not reimplemented here), then one wide table, one row
+     per model, old vs. new side by side with a computed delta for tokens
+     and time, and separate old/new judgment columns — a reader compares
+     the row's two halves directly instead of cross-referencing two
+     separate reports by hand.
+
+   - Save the file (`<skill-name>-eval.md` or `<old>-vs-<new>-eval.md`),
+     to `/mnt/user-data/outputs/` when that convention exists in the
+     current environment, otherwise next to the target skill directory
+     (directories, for a comparison) with the path given to the user
      directly.
 
 # Rules

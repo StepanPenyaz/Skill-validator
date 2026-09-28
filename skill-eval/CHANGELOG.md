@@ -4,6 +4,51 @@ All notable changes to the `skill-eval` skill are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 versioning follows [SemVer](https://semver.org/).
 
+## [1.2.0] — 2026-09-28
+
+### Added
+- **Single-skill reports now embed the static review, not just a pass/
+  fail note.** `scripts/render_report.py`'s single-skill shape gains
+  `gate_check.stage_1a.findings` (rendered via
+  `scripts/generate_static_report.py`'s own `render_markdown_report`,
+  imported rather than reimplemented, as a `## Static Check Report`
+  subsection — its `heading_level` parameter is new, letting a caller
+  embed it under a bigger report's own heading) and
+  `gate_check.stage_1b.category_scores`/`.review_file` (rendered as a
+  `## Qualitative Review Summary` table pointing at the full
+  `<skill-name>-review.md` rather than duplicating its rewrites inline).
+  Both are additive and optional — a JSON payload without them (like the
+  existing sample fixtures) renders exactly as before.
+- **Comparative reports, for a two-version invocation.**
+  `scripts/render_report.py` gains a `"report_type": "comparative"` input
+  shape: `old_skill_name`/`new_skill_name`, `structural_diff`/
+  `qualitative_diff` (`scripts/diff_reviews.py`'s own output, rendered via
+  its `render_markdown` — also given a new `heading_level` parameter for
+  the same embedding reason), and `runs[]` with per-model `old`/`new`
+  cost/judgment objects rendered as one wide table (old vs. new side by
+  side, with a computed token/time delta per row) instead of two separate
+  tables a reader would have to line up by hand. `SKILL.md`'s Workflow now
+  states the mode decision up front (single skill vs. two versions) and
+  documents both step-4 shapes; the two-version case runs steps 1-3 twice
+  (once per version, same model list and task fixture) and step 4 renders
+  the comparative shape instead of two independent reports.
+- Three new fixtures/regression checks: `render-report-full-single-sample.json`
+  (embedded static findings + qualitative summary), `render-report-comparative-sample.json`
+  (built from real `diff_reviews.py` output against the existing
+  `diff-old-skill`/`diff-new-skill` and `version-diff` fixtures, not
+  hand-typed), and `render-report-missing-tokens-sample.json` extended to
+  also exercise the comparative table's per-side `null`-tokens handling.
+
+### Fixed
+- `tests/run_regression.py`'s `run()` helper decoded a subprocess's stdout
+  using the platform's default locale codec (cp1252 on Windows) instead of
+  the UTF-8 every script here actually writes (each reconfigures its own
+  `sys.stdout` to UTF-8, for the em dashes/arrows/bullets they print) —
+  silent mojibake (`→` became `â†’`) rather than a decode error, so it went
+  unnoticed until a new comparative-report test asserted on an arrow
+  character directly. Fixed by passing `encoding="utf-8"` explicitly to
+  `subprocess.run`.
+
 ## [1.1.0] — 2026-09-28
 
 ### Changed (breaking: run behavior)

@@ -169,10 +169,14 @@ def esc(value):
     return str(value if value is not None else "").replace("|", "\\|").replace("\n", " ")
 
 
-def render_markdown(diff):
+def render_markdown(diff, heading_level="#"):
+    """`heading_level` lets a caller embed this as a subsection of a bigger
+    report (skill-eval's render_report.py, for its comparative-report mode)
+    instead of duplicating this rendering logic there."""
+    sub_heading = heading_level + "#"
     lines = []
     if diff["mode"] == "deterministic":
-        lines.append(f"# Diff: `{diff['old_path']}` -> `{diff['new_path']}` (deterministic)")
+        lines.append(f"{heading_level} Diff: `{diff['old_path']}` -> `{diff['new_path']}` (deterministic)")
         lines.append("")
         ced, swd = diff["compliance_errors_delta"], diff["structural_warnings_delta"]
         lines.append(f"Compliance errors: {ced['old_count']} -> {ced['new_count']}  ")
@@ -191,15 +195,15 @@ def render_markdown(diff):
                                  ("Resolved findings", diff["resolved_findings"])):
             if not findings:
                 continue
-            lines += ["", f"## {title}", "", header, sep]
+            lines += ["", f"{sub_heading} {title}", "", header, sep]
             for f in findings:
                 lines.append(f"| {esc(f['check_id'])} | {esc(f['severity'])} | {esc(f['issue'])} | {esc(f.get('location'))} |")
     else:
-        lines.append(f"# Diff: {diff['old_skill_name']} -> {diff['new_skill_name']} (qualitative)")
+        lines.append(f"{heading_level} Diff: {diff['old_skill_name']} -> {diff['new_skill_name']} (qualitative)")
         lines.append("")
         ov = diff["overall_verdict"]
         lines.append(f"Overall verdict: {ov['old']} -> {ov['new']}{' (changed)' if ov['changed'] else ''}")
-        lines += ["", "## Category scores", "", "| Category | Old | New | Changed |", "|---|---|---|---|"]
+        lines += ["", f"{sub_heading} Category scores", "", "| Category | Old | New | Changed |", "|---|---|---|---|"]
         for category, v in diff["category_scores"].items():
             lines.append(f"| {esc(category)} | {esc(v['old'])} | {esc(v['new'])} | {'yes' if v['changed'] else ''} |")
         lines.append("")
@@ -214,11 +218,11 @@ def render_markdown(diff):
                                  ("Resolved findings", diff["resolved_findings"])):
             if not findings:
                 continue
-            lines += ["", f"## {title}", "", header, sep]
+            lines += ["", f"{sub_heading} {title}", "", header, sep]
             for f in findings:
                 lines.append(f"| {esc(f.get('category'))} | {esc(f.get('severity'))} | {esc(f.get('issue'))} | {esc(f.get('location'))} |")
         if diff["severity_changed_findings"]:
-            lines += ["", "## Severity changed", "",
+            lines += ["", f"{sub_heading} Severity changed", "",
                       "| Category | Old Severity | New Severity | Issue | Location |", "|---|---|---|---|---|"]
             for f in diff["severity_changed_findings"]:
                 lines.append(

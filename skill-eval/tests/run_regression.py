@@ -52,10 +52,17 @@ _checks_run = 0
 
 
 def run(*args):
-    """Runs `python3 <args>` exactly as a user would, returning (stdout, returncode, stderr)."""
+    """Runs `python3 <args>` exactly as a user would, returning (stdout, returncode, stderr).
+    `encoding="utf-8"` is explicit, not left to the platform default: every
+    script here reconfigures its own stdout to utf-8 (for the em dashes/
+    arrows/bullets they print), but subprocess.run's text-mode decoding
+    otherwise falls back to the console's locale codec (cp1252 on
+    Windows), which silently mangles those bytes into mojibake instead of
+    raising — a real bug that only ever showed up once a test asserted on
+    one of those characters directly."""
     proc = subprocess.run(
         [sys.executable, *(str(a) for a in args)],
-        capture_output=True, text=True,
+        capture_output=True, text=True, encoding="utf-8",
     )
     return proc.stdout, proc.returncode, proc.stderr
 
@@ -323,6 +330,32 @@ def _():
     assert_in("`overall_verdict` = `blocked` (safety)", stdout, "blocked category detail")
     assert_in("sonnet", stdout, "run table still rendered despite the Blocker")
     assert_in("No task fixture existed yet for this skill", stdout, "auto-generated-fixture note")
+
+
+@check("render_report.py (single, full): embeds the static findings table and qualitative summary via generate_static_report.py's own renderer")
+def _():
+    stdout, returncode, stderr = run(SCRIPTS / "render_report.py", FIXTURES / "render-report-full-single-sample.json")
+    assert_eq(returncode, 0, f"exit code (stderr: {stderr.strip()})")
+    assert_in("## Static Check Report: sample-skill", stdout, "embedded static findings section, demoted to h2")
+    assert_in("references/unused.md", stdout, "static finding's location rendered")
+    assert_in("Security scan partially skipped", stdout, "security-scan-skipped note carried through")
+    assert_in("## Qualitative Review Summary", stdout, "qualitative summary section present")
+    assert_in("structure_and_progressive_disclosure", stdout, "category score row present")
+    assert_in("sample-skill-review.md", stdout, "pointer to the full qualitative review file")
+    assert_in("sonnet", stdout, "cost/judgment table still rendered after the static sections")
+
+
+@check("render_report.py (comparative): renders the structural + qualitative diff (via diff_reviews.py) and a side-by-side old/new cost table")
+def _():
+    stdout, returncode, stderr = run(SCRIPTS / "render_report.py", FIXTURES / "render-report-comparative-sample.json")
+    assert_eq(returncode, 0, f"exit code (stderr: {stderr.strip()})")
+    assert_in("# skill-eval Comparative Report: sample-skill-v1", stdout, "comparative header")
+    assert_in("(deterministic)", stdout, "structural diff section embedded")
+    assert_in("(qualitative)", stdout, "qualitative diff section embedded")
+    assert_in("orphaned_resource_file", stdout, "a structural diff finding rendered")
+    assert_in("## Cost & Behavior Comparison", stdout, "cost comparison section header")
+    assert_in("10,000 → 12,000 (+2,000)", stdout, "sonnet row's token delta rendered")
+    assert_in("unknown (capture failed", stdout, "haiku row's missing old-side tokens rendered as an explicit gap, not silently dropped")
 
 
 # ============================================================
