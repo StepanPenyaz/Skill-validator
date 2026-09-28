@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-diff_reviews.py — diffs skill-review's output across two versions of a
-skill, per SKILL.md's Decision Guidelines: "the JSON output is designed to
+diff_reviews.py — diffs this skill's static-review output across two versions
+of a skill, per SKILL.md's Decision Guidelines: "the JSON output is designed to
 be diffed across versions." Fills the gap between that claim and what was
 actually shipped: previously this diffing was a manual, by-hand process
 with a separate external tool.

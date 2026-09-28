@@ -1,5 +1,14 @@
 # skill-eval end-to-end demo: evaluating skill-review
 
+> **Historical note:** this demo predates the merge that folded `skill-review`
+> into `skill-eval` as its static-review layer (see `CHANGELOG.md`). At the
+> time this ran, `skill-review` was a separate skill and target directory;
+> the mechanics described below (gate mode, full review mode, the per-model
+> subagent run) are unchanged post-merge, but the `skill-review/` path this
+> demo references no longer exists as a standalone skill. Left as-is rather
+> than rewritten, since it's a record of a real run, not living
+> documentation.
+
 Real output from running `skill-eval`'s complete Workflow (issue #27) —
 not a synthetic example. Target skill: `skill-review` itself. Task
 fixture: `tests/fixtures/tasks/skill-review.yaml` (issue #21). Model list:

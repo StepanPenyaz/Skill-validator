@@ -6,34 +6,6 @@ on:
   pull_request:
 
 jobs:
-  skill-review:
-    name: skill-review regression suite
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: pip install -r skill-review/requirements.txt
-
-      # skill-review/tests/run_regression.py runs structural_check.py and
-      # reconcile_reviews.py against every tests/fixtures/ case (plus
-      # skill-review's own directory) exactly as documented in
-      # skill-review/README.md's "Local testing" section, and fails the
-      # build if any of them stop matching what's documented there.
-      - name: Run skill-review's regression suite
-        run: python3 skill-review/tests/run_regression.py
-
-      # A clean structural_check.py run doesn't guarantee the skill still
-      # packages — this exercises the same "exactly one shipped SKILL.md"
-      # rule package_skill.py enforces, so a packaging regression fails CI
-      # too, not just a local `git push` surprise.
-      - name: Verify skill-review still packages cleanly
-        run: python3 scripts/package_skill.py skill-review /tmp/dist
-
   skill-eval:
     name: skill-eval regression suite
     runs-on: ubuntu-latest
@@ -47,12 +19,20 @@ jobs:
       - name: Install dependencies
         run: pip install -r skill-eval/requirements.txt
 
-      # skill-eval/tests/run_regression.py covers what's actually
-      # deterministic/scriptable: the gate-check signal it reads from
-      # skill-review's own structural_check.py, models_config.yaml's
-      # shape, scripts/render_report.py's table rendering, a self-check,
-      # and packaging — not anything requiring a live model call (task
-      # execution, judgment-writing, skill-review's qualitative full
-      # review mode), same reasoning skill-review's own suite uses.
+      # skill-eval/tests/run_regression.py covers both halves of this
+      # skill: the static-review checks absorbed from the former
+      # skill-review skill (structural_check.py against every fixture,
+      # reconcile_reviews.py, diff_reviews.py) and the cost/execution
+      # layer's scriptable parts (models_config.yaml's shape,
+      # render_report.py's table rendering, a self-check, packaging) —
+      # not anything requiring a live model call (task execution,
+      # judgment-writing, the qualitative full review mode itself).
       - name: Run skill-eval's regression suite
         run: python3 skill-eval/tests/run_regression.py
+
+      # A clean structural_check.py run doesn't guarantee the skill still
+      # packages — this exercises the same "exactly one shipped SKILL.md"
+      # rule package_skill.py enforces, so a packaging regression fails CI
+      # too, not just a local `git push` surprise.
+      - name: Verify skill-eval still packages cleanly
+        run: python3 scripts/package_skill.py skill-eval /tmp/dist

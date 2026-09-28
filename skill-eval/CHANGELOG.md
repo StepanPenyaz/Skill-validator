@@ -4,6 +4,49 @@ All notable changes to the `skill-eval` skill are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 versioning follows [SemVer](https://semver.org/).
 
+## [1.0.0] — 2026-09-28
+
+### Changed (merge, breaking)
+- **Merged `skill-review` into `skill-eval`.** `skill-review` no longer
+  exists as a separately-triggerable skill; its static-review layer (gate
+  mode + full review mode, self-consistency, version-diffing) is now this
+  skill's Workflow step 1, and its scripts/references/fixtures live under
+  `skill-eval/` directly:
+  - `scripts/{structural_check,generate_static_report,reconcile_reviews,diff_reviews}.py`
+    moved from `skill-review/scripts/` — unchanged, self-contained,
+    path-relative-to-`__file__` logic, so no code changes were needed.
+  - `references/{rubric.md,schema.md,preferred-structure.md,severity_config.yaml}`
+    moved from `skill-review/references/`.
+  - `tests/fixtures/{bad-skill,good-skill,clean-skill-with-tricky-patterns,
+    consistency-runs,diff-old-skill,diff-new-skill,version-diff}` moved from
+    `skill-review/tests/fixtures/`; `tests/run_regression.py` now runs both
+    skills' former regression suites as one (18 checks).
+  - `skill-review/README.md`'s repo/dev-facing content (two entry points
+    table, what it validates, self-consistency, retuning severity, diffing
+    across versions) folded into this `README.md`. `skill-review/CHANGELOG.md`
+    kept as `CHANGELOG-skill-review-history.md`, frozen, not maintained
+    going forward.
+  - `SKILL.md` rewritten: frontmatter `description`/"When to Use" now also
+    covers `skill-review`'s former triggering phrases ("review this skill",
+    "is this SKILL.md any good", "what's wrong with my skill"); Workflow
+    step 1's two stages now run locally (`scripts/structural_check.py`,
+    then an inlined full-review-mode pass against `references/rubric.md`)
+    instead of pointing at a separate skill's `SKILL.md`.
+  - **`scripts/structural_check.py`/`generate_static_report.py` still work
+    standalone**, independent of the rest of this skill's pipeline — a
+    quick pre-check (`python3 skill-eval/scripts/structural_check.py <dir>`)
+    doesn't require going through the full Workflow. This was an explicit
+    design goal for the merge, not an incidental side effect.
+  - Root `README.md`, `.github/workflows/tests.yml`, and
+    `scripts/package_skill.py`'s comments updated for the single-skill
+    layout (one CI job instead of two).
+  - **What did not change in this release:** the static-review stages still
+    hard-stop the Workflow on a Blocker/`blocked` verdict, and Workflow
+    step 2 still stops and asks the user when no task fixture exists yet.
+    Both are being revisited in a follow-up release (removing blocking
+    behavior so a run always produces a report) — this release is the
+    structural merge only.
+
 ## [0.13.0] — 2026-09-23
 
 ### Changed

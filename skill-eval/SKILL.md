@@ -1,86 +1,161 @@
 ---
 name: skill-eval
-description: Runs a Claude Agent Skill against real tasks and reports what it actually cost to do so — model used, token count, wall-clock time, and a short qualitative judgment of how the run went. Use this whenever the user asks to evaluate a skill's runtime cost, compare how a skill performs across models, measure a skill's token/time cost, or wants to know whether a new version of a skill is worth its cost relative to the old one. Not for asking whether a SKILL.md is well-written — that's skill-review.
+description: Statically reviews a Claude Agent Skill's SKILL.md and bundled resources against best-practice conventions (frontmatter compliance, structure, writing style, safety), then runs it against real tasks and reports what it actually cost to do so — model used, token count, wall-clock time — alongside a short qualitative judgment of how the run went. Use this whenever the user asks to review, audit, lint, validate, critique, grade, or get feedback on a skill or SKILL.md file ("check this skill", "is this SKILL.md any good", "what's wrong with my skill"), or to evaluate, benchmark, or measure a skill's runtime cost/behavior ("how much does this skill cost to run", "how does this skill perform on Haiku vs Sonnet"). Also use it to compare two versions of the same skill — the report covers both the structural/quality diff and the cost/behavior diff in that one case. Trigger even on casual phrasing, without the user saying "validate" or "evaluate" explicitly.
 metadata:
-  version: "0.13.0"
+  version: "1.0.0"
   maintained_by: "Claude Code Skill Evaluation project"
 ---
 
 # Purpose
 
-`skill-eval` answers a different question from `skill-review`. `skill-review`
-asks "is this skill well-written?" (a static read of `SKILL.md` and its
-bundled resources, no execution). `skill-eval` asks "does this skill do its
-job well, at what cost?" — it actually runs the target skill against real
-tasks and reports what happened: which model, how many tokens, how long it
-took, and a short judgment of the result.
+`skill-eval` answers two related questions about a Claude Agent Skill, in
+one pipeline:
 
-It does not produce a single numeric quality score. A run's outcome is
+1. **Is it well-written?** A static read of `SKILL.md` and its bundled
+   resources against known best practices — frontmatter compliance,
+   progressive disclosure, description/triggering strength, writing style,
+   overfitting, safety. No execution.
+2. **Does it do its job well, at what cost?** Actually running the skill
+   against real tasks and reporting what happened: which model, how many
+   tokens, how long it took, and a short judgment of the result.
+
+These two questions used to live in separate skills (`skill-review` and
+`skill-eval`); they're now one skill because the second question was
+always downstream of the first — there's no point measuring the runtime
+cost of a skill that's badly written or unsafe, and the static layer's own
+JSON output is what step 2 needs anyway to know whether it's safe to
+proceed. See CHANGELOG.md's merge entry for the history.
+
+The static layer keeps its own two officially supported entry points —
+named explicitly so a CI pipeline, or a person deciding what to run,
+doesn't have to reverse-engineer which one they need:
+
+- **Gate mode** — the deterministic layer only: `scripts/structural_check.py`
+  / `scripts/generate_static_report.py`, plus `scripts/diff_reviews.py` when
+  given two skill directories. No model call; same input always produces
+  the same output; safe to run standalone or unattended in CI, independent
+  of the rest of this skill's pipeline — a person can run
+  `python3 skill-eval/scripts/structural_check.py <dir>` directly for a
+  quick pre-check before ever asking for a full evaluation. Gate mode is a
+  **complete, correct answer** to "give me a fast structural/security
+  check," not a partial or lesser version of a review.
+- **Full review mode** — gate mode's output, plus the qualitative pass: read
+  the skill yourself against `references/rubric.md` and turn judgment calls
+  into scored findings with concrete rewrites. Some things about a skill
+  need judgment, not a regex — is the description "pushy" enough, does the
+  writing explain *why* instead of barking directives, is the skill overfit
+  to one narrow example, is a gate-mode candidate (a MUST/NEVER line, a
+  `curl | bash` pattern) an actual problem in context.
+
+Running the target skill against real tasks (the cost/behavior layer) does
+not produce a single numeric quality score either. A run's outcome is
 reported as a short freeform judgment (concrete observations, not a
 pass/fail verdict or a rating) sitting next to the run's cost in the same
 table row — the comparison is made by reading the row, not by a computed
 ratio.
 
-`skill-eval` runs `skill-review` against the target skill before doing
-anything else — both its deterministic gate mode and, if that passes, its
-qualitative full review mode too — and refuses to proceed if either comes
-back blocked. There is no point measuring the runtime cost of a skill that
-would fail to parse or ship, and a hard compliance error isn't the only
-way a skill can be broken: some blocking problems (a safety-relevant
-pattern that's an actual problem in context, not just a regex candidate)
-only surface once a model actually reads the skill. See Workflow.
+`skill-eval` runs its own static review against the target skill before
+doing anything else — both gate mode and, if that passes, full review mode
+too — and refuses to proceed if either comes back blocked. There is no
+point measuring the runtime cost of a skill that would fail to parse or
+ship, and a hard compliance error isn't the only way a skill can be broken:
+some blocking problems (a safety-relevant pattern that's an actual problem
+in context, not just a regex candidate) only surface once a model actually
+reads the skill. See Workflow.
 
 # When to Use
 
+- The user asks to review, audit, lint, validate, critique, grade, or get
+  feedback on a skill or a `SKILL.md` file — including casual phrasing like
+  "check this skill", "is this SKILL.md any good", or "what's wrong with my
+  skill," without them saying "validate" explicitly. This is full review
+  mode by default (see Workflow step 1 and Decision Guidelines).
 - The user asks to evaluate, benchmark, or measure a skill's runtime cost
   or behavior — e.g. "how much does this skill cost to run", "evaluate
   this skill", "how does this skill perform on Haiku vs Sonnet".
-- Comparing two versions of the same skill on cost and behavior, not just
-  on `skill-review`'s static quality score.
-- As part of a decision about whether a change to a skill is worth its
-  added (or reduced) cost.
+- As a pre-check before publishing a new skill — gate mode alone is usually
+  enough for this (see Decision Guidelines); the full pipeline if the user
+  also wants runtime cost/behavior data before publishing, not just a
+  pass/fail.
+- Comparing two versions of the same skill — on structural/writing quality,
+  on cost and behavior, or (the default when two versions are given) both
+  at once as a single comparative report.
+- As a gate in CI or a script — this is gate mode only, not the full
+  pipeline (see Decision Guidelines): deterministic, no model call, won't
+  false-block on a subjective judgment call.
 
 # When NOT to Use
 
-- The user wants to know whether a `SKILL.md` is well-formed, well-written,
-  or ready to publish, without running it — that's `skill-review`'s job
-  (gate mode or full review mode), not this skill's.
 - The user wants a single quality score or a pass/fail verdict on a
-  skill's behavior — `skill-eval` deliberately reports a qualitative
-  judgment instead, not a score; point out this limitation rather than
-  inventing a number to satisfy the request.
+  skill's runtime behavior — `skill-eval` deliberately reports a
+  qualitative judgment instead, not a score; point out this limitation
+  rather than inventing a number to satisfy the request.
+- The user wants to know whether a skill performs well in actual use
+  (triggering accuracy in practice, task success rate) from a static read
+  alone, without running it — that's what Workflow step 2 is for; don't
+  try to answer a runtime question from gate/full-review-mode output alone.
 
 # Workflow
 
-1. **Run the gate check — two stages, cheapest first.** Before doing
-   anything else, run `skill-review` against the target skill directory,
-   in this order, stopping at the first stage that fails:
+1. **Run the static review — two stages, cheapest first.** Before doing
+   anything else, review the target skill directory, in this order,
+   stopping at the first stage that fails:
 
-   1a. **Deterministic stage.** Run `skill-review`'s gate mode:
+   1a. **Deterministic stage (gate mode).**
 
        ```bash
-       python3 ../skill-review/scripts/structural_check.py <target-skill-directory>
+       python3 scripts/structural_check.py <target-skill-directory>
        ```
 
-       No model call. If `compliance_errors` is non-empty (any
-       Blocker-severity finding — malformed frontmatter, a hardcoded
-       secret, etc.) → **stop immediately**. Report the gate failure to
-       the user, quoting the `compliance_errors` entries verbatim, and do
-       not proceed to stage 1b or to running the target skill at all. If
-       empty → continue to stage 1b. `structural_warnings`
-       (Warning/Info-severity findings) are **not** blocking — see
-       Decision Guidelines for what to do with them instead of silently
-       dropping them.
+       This prints one JSON object: parsed frontmatter, `compliance_errors`
+       (hard failures), `structural_warnings`, and `metrics` (line counts,
+       description word count, resource directory inventory, preferred-
+       structure section coverage, orphaned-file candidates, hardcoded-path
+       candidates, imperative marker counts, declared-vs-referenced tool
+       usage, and security pattern candidates). If `compliance_errors` is
+       non-empty (any Blocker-severity finding — malformed frontmatter, a
+       hardcoded secret, etc.) → **stop immediately**. Report the failure
+       to the user, quoting the `compliance_errors` entries verbatim, and
+       do not proceed to stage 1b or to running the target skill at all.
+       If empty → continue to stage 1b. `structural_warnings` (Warning/
+       Info-severity findings) are **not** blocking — see Decision
+       Guidelines for what to do with them instead of silently dropping
+       them.
 
-   1b. **Qualitative stage.** Run `skill-review`'s full review mode
-       (`skill-review/SKILL.md` Workflow steps 1-5 — this one does need a
-       model, since it's the pass that judges things a regex can't, like
-       whether a safety-relevant pattern is an actual problem in context)
-       against the same target skill directory. If the resulting
-       `overall_verdict` is `blocked` (any `category_scores` entry is
-       `blocker`) → **stop immediately**. Report which category was
-       blocked and why, and do not proceed to running the target skill.
-       If not blocked → continue to step 2.
+       `dangerous_shell_pattern_candidates`, `prompt_injection_phrase_candidates`,
+       and `undeclared_external_hosts` are skipped by default (empty lists)
+       for a skill that declares and references no shell-executing or
+       network-capable tool — check `metrics.security_scan.skipped` before
+       treating an empty list as "found nothing" rather than "didn't look."
+       Re-run with `--force-security-scan` if the tool declarations look
+       wrong. `hardcoded_secret_candidates` and
+       `prohibited_action_phrase_candidates` are never skipped.
+
+       If the user only wants this deterministic layer (see Decision
+       Guidelines), it's fine to stop here and present gate mode's output
+       (or `scripts/generate_static_report.py`'s Markdown rendering) as a
+       complete answer — not a preview of more to come.
+
+   1b. **Qualitative stage (full review mode).** Skipped only when the
+       user explicitly asked for gate mode alone. Otherwise: open the
+       actual `SKILL.md` body (and any `references/` files it points to)
+       and score it against `references/rubric.md`, covering description &
+       triggering quality, structure & progressive disclosure, writing
+       style & content quality, and safety. For every candidate stage 1a
+       flagged as a *signal* rather than a hard fact (orphaned resource
+       files, portability path matches, high imperative-marker counts,
+       dangerous-shell/prompt-injection/prohibited-action/undeclared-host
+       candidates), verify it against the real text before treating it as
+       a finding — false positives erode trust in the whole report. For
+       every Minor/Major/Blocker finding, write a concrete rewrite (or a
+       described mechanical fix), not just a diagnosis. Compute
+       `overall_verdict` per Decision Guidelines and produce both output
+       files following `references/schema.md` exactly:
+       `<skill-name>-review.json` and `<skill-name>-review.md`. If the
+       resulting `overall_verdict` is `blocked` (any `category_scores`
+       entry is `blocker`) → **stop immediately**. Report which category
+       was blocked and why, and do not proceed to running the target
+       skill. If not blocked → continue to step 2.
 
    Run 1a before 1b, not the other way around or both at once: 1a is
    free (no model call) and catches most breakage, so there's no reason
@@ -155,7 +230,7 @@ only surface once a model actually reads the skill. See Workflow.
    nothing they could verify against the transcript.
 
 4. **Render the report.** By this point steps 1-3 have already collected
-   everything needed — the gate-check result, and each run's model,
+   everything needed — the static-review result, and each run's model,
    token count, elapsed time, and judgment bullets. Rendering that into
    the final table is purely mechanical, so it's a script, not another
    judgment call:
@@ -171,33 +246,46 @@ only surface once a model actually reads the skill. See Workflow.
      python3 scripts/render_report.py <input.json> --out <skill-name>-eval.md
      ```
 
-   - The rendered report leads with the gate-check result — both stages,
-     even though both necessarily passed to get this far — so the report
-     is self-contained and doesn't require re-running gate mode to know
-     it happened (see Decision Guidelines on why that context shouldn't
-     silently disappear). Then one Markdown table, one row per model:
-     `Model Used | Number of Tokens | Time Spent | Claude's Judgment`,
-     judgment bullets rendered as a `<br>`-separated list within the
-     cell.
-   - Save the file as `<skill-name>-eval.md` — mirroring `skill-review`'s
-     `<skill-name>-review.md` convention exactly, including where it's
-     saved: to `/mnt/user-data/outputs/` when that convention exists in
-     the current environment, otherwise next to the target skill
-     directory with the path given to the user directly.
+   - The rendered report leads with the static-review result — both
+     stages, even though both necessarily passed to get this far — so the
+     report is self-contained and doesn't require re-running gate mode to
+     know it happened (see Decision Guidelines on why that context
+     shouldn't silently disappear). Then one Markdown table, one row per
+     model: `Model Used | Number of Tokens | Time Spent | Claude's
+     Judgment`, judgment bullets rendered as a `<br>`-separated list
+     within the cell.
+   - Save the file as `<skill-name>-eval.md`, to `/mnt/user-data/outputs/`
+     when that convention exists in the current environment, otherwise
+     next to the target skill directory with the path given to the user
+     directly.
 
 # Rules
 
-- **Never proceed past a failed gate check, at either stage.** If Workflow
-  step 1a's `compliance_errors` is non-empty, or step 1b's
-  `overall_verdict` is `blocked`, stop there — report the failure and do
-  not run the target skill. This is not optional or a judgment call: a
-  skill with a Blocker-level finding, deterministic or qualitative,
-  shouldn't be run to measure its cost or behavior, regardless of how the
-  user phrased the request.
+- **Compliance errors are automatic Blockers.** Any `compliance_errors`
+  stage 1a returns are hard failures — the skill will fail to parse or
+  upload. List these first regardless of what else is found.
+- **Confirm before reporting.** Every candidate metric from stage 1a
+  (orphaned files, hard-directive lines, dangerous-shell patterns, prompt-
+  injection phrasing, prohibited-action phrasing, undeclared hosts,
+  tool-usage mismatches) must be checked against the real surrounding text
+  in stage 1b before it becomes a finding. A raw regex match is not a
+  verdict.
+- **Keep rewrites proportionate.** Don't rewrite parts of the skill that
+  are already fine just to demonstrate thoroughness.
+- **The static-review stages never execute or modify the skill being
+  reviewed** — they only read `SKILL.md` and its bundled resources. Only
+  step 2 (after both stages pass) actually runs the target skill.
+- **Never proceed past a failed static review, at either stage.** If step
+  1a's `compliance_errors` is non-empty, or step 1b's `overall_verdict` is
+  `blocked`, stop there — report the failure and do not run the target
+  skill. This is not optional or a judgment call: a skill with a
+  Blocker-level finding, deterministic or qualitative, shouldn't be run to
+  measure its cost or behavior, regardless of how the user phrased the
+  request.
 - **Never skip straight to 1b, and never run it before 1a.** 1a is free
   and catches most breakage; running the model-requiring qualitative stage
-  first (or instead) wastes a model call on a skill that was already
-  going to fail the deterministic check.
+  first (or instead) wastes a model call on a skill that was already going
+  to fail the deterministic check.
 - **Never invent tasks on the fly.** If `tests/fixtures/tasks/<skill-name>.yaml`
   doesn't exist yet for the target skill, stop and tell the user a task
   fixture needs to be authored first (`references/task-authoring.md`)
@@ -221,12 +309,34 @@ only surface once a model actually reads the skill. See Workflow.
 
 # Decision Guidelines
 
+- **Full pipeline vs. gate-mode-only vs. static-review-only — decide this
+  first.** Default to the full pipeline (Workflow steps 1-4) when the
+  request implies either a writing-quality review or a cost/behavior
+  question. Two narrower asks, both legitimate, not a lesser version of
+  the full pipeline:
+  - **Gate mode only**: the ask is explicitly for a fast, deterministic,
+    non-judgmental check — "just run the linter," "quick check before I
+    publish," wiring this into CI or a script, or any phrasing that wants
+    a stable exit code / machine-checkable result rather than prose
+    feedback. Run `python3 scripts/generate_static_report.py
+    <target-skill-directory>` (or `structural_check.py` for raw JSON) and
+    present that as complete, not a preview of more to come.
+  - **Static review only (gate mode + full review mode, no execution)**:
+    the ask is about writing quality/compliance only ("review this
+    skill," "is this SKILL.md any good," "what's wrong with my skill")
+    with no mention of cost, runtime behavior, or "evaluate." Run Workflow
+    step 1 (both stages) and stop there — don't run the target skill or
+    render the cost table unless the user also wants that.
+  Switching to a narrower mode is **not** a downgrade — don't silently
+  expand a "just review this" request into a full run-and-cost pipeline,
+  and don't silently shrink a "how much does this cost" request down to
+  just the static review either.
 - **`structural_warnings` from stage 1a are not blocking — proceed, but
   don't drop them.** A skill can have Warning/Info-severity findings (an
   orphaned resource file, a missing `metadata.version`, a dangerous-
   shell-pattern candidate) and still be safe to run. Continue past 1a, but
   carry the warning count forward and surface it alongside the final
-  report — e.g. a short "Gate check: N structural warning(s), not
+  report — e.g. a short "Static review: N structural warning(s), not
   blocking" note near the results table — so the user can see the target
   skill wasn't perfectly clean even though evaluation proceeded, instead
   of that information silently disappearing after stage 1a.
@@ -256,12 +366,87 @@ only surface once a model actually reads the skill. See Workflow.
   tasks — tell the user, and offer to write one following
   `references/task-authoring.md` (a manual/assisted step, per that file)
   before continuing. Only proceed with the run once a real fixture exists.
+- If `fatal_error` is present in a script's output (e.g. path doesn't
+  exist, PyYAML missing — install with
+  `pip install pyyaml --break-system-packages` if needed) → fix the
+  environment issue and rerun before continuing.
+- If the user doubts the cost-conditional security-scan skip (stage 1a) —
+  e.g. the skill actually shells out or hits the network through a path
+  the heuristic doesn't recognize — add `--force-security-scan` to either
+  script to run the full scan regardless of declared/referenced tools.
+- If the user just wants a quick verdict in chat rather than files → it's
+  fine to summarize inline instead of writing output files. Use judgment
+  based on how the request was phrased ("give me a quick take" vs. "review
+  this skill").
+- **Self-consistency (optional, static review only).** A single
+  qualitative pass (stage 1b) has run-to-run variance — the same skill
+  read twice can land on different severities, or catch a different
+  borderline finding. Reach for this when the user explicitly asks for a
+  more confident or robust review ("double check this," "how sure are
+  you," "run this a few times"), or when the review's output will feed
+  something where noise is costly (a CI gate, a version comparison, a
+  publish/block decision) — not by default; it costs N times the
+  qualitative pass. Repeat stage 1b independently N times (N=3 by
+  default, each a genuinely fresh read), save each as
+  `<skill-name>-review-run<N>.json`, and reconcile:
+  `python3 scripts/reconcile_reviews.py <run1.json> <run2.json> [...] [--threshold N]`.
+  It groups findings by `(category, location)`, reports each one's
+  agreement count out of N and a consensus severity (ties broken toward
+  the more severe value), and recomputes `overall_verdict` from the
+  reconciled `category_scores`. Build the final `<skill-name>-review.json`/
+  `.md` from the reconciled output, marking each finding's confirmation
+  ("3/3 runs" vs. "1/3 runs — unconfirmed, review individually") rather
+  than presenting every finding at uniform confidence.
+- If `reconcile_reviews.py` reports a `fatal_error` (fewer than 2 run files
+  given, a run file missing a required field, or runs that reference
+  different `skill_name` values) → fix the input and rerun; a mismatched
+  `skill_name` usually means one of the runs was accidentally produced
+  against the wrong skill or an earlier version of it.
+- Compute `overall_verdict` from the category scores: `blocked` if any
+  category is `blocker`, `needs_work` if any is `major`,
+  `pass_with_suggestions` if only `minor` findings remain, else `pass`.
+- **Diffing two versions' static review.** Don't diff two runs by hand —
+  use `scripts/diff_reviews.py <old> <new>` (`--markdown` for a
+  human-readable table, `--fail-on-new` to exit 1 only when `<new>`
+  introduces a finding `<old>` didn't have, `--out <path>` to write to a
+  file). It auto-detects what `<old>`/`<new>` are: two skill directories
+  diffs the deterministic layer (stage 1a) — no model call either side;
+  two already-produced `<skill-name>-review.json` files diffs the
+  qualitative layer (stage 1b) — needs full review mode to have already
+  produced both files, but the diff itself is still deterministic.
+  Mixing one directory and one `.json` file is rejected. When the user
+  gives two skill directories (old and new version) to `skill-eval`
+  directly, this diff is part of the comparative report Workflow produces
+  for that case (both the static-review diff and a side-by-side cost/
+  judgment table per model) — not a separate ask.
 
 # References
 
-- `../skill-review/references/schema.md` — the `overall_verdict`/
-  `category_scores` shape Workflow step 1b's full review mode produces;
-  needed to know what "blocked" actually means there.
+- `scripts/structural_check.py` — run in Workflow step 1a to produce the
+  deterministic JSON scorecard.
+- `scripts/generate_static_report.py` — quick static-only Markdown report;
+  see Decision Guidelines for when to use this instead of the full
+  pipeline.
+- `scripts/reconcile_reviews.py` — deterministic aggregation over N
+  independent qualitative review runs; see Decision Guidelines'
+  self-consistency entry.
+- `scripts/diff_reviews.py` — deterministic diff between two skill
+  directories or two `<skill-name>-review.json` files; see Decision
+  Guidelines for its two modes and `--fail-on-new`/`--markdown` flags.
+- `scripts/render_report.py` — run in Workflow step 4 to render the final
+  Markdown report; purely mechanical, no model call.
+- `references/rubric.md` — the qualitative scoring rubric; open it in
+  Workflow step 1b to score description/triggering, structure, writing
+  style, and safety.
+- `references/preferred-structure.md` — the optional 8-section outline
+  used when judging structure in Workflow step 1b.
+- `references/schema.md` — the exact JSON output structure for
+  `<skill-name>-review.json`/`.md`; the `overall_verdict`/
+  `category_scores` shape needed to know what "blocked" actually means in
+  step 1b.
+- `references/severity_config.yaml` — the `check_id -> severity` table
+  `structural_check.py` reads at run time; if a run's severities look off,
+  check this file (not the script) first.
 - `references/models_config.yaml` — the editable `default_models` list;
   see Decision Guidelines for how to extend it, persistently or per-run.
 - `references/task-authoring.md` — the `tests/fixtures/tasks/<skill-name>.yaml`
@@ -270,8 +455,8 @@ only surface once a model actually reads the skill. See Workflow.
   real, measured value (read off the `Agent` tool's own return metadata),
   not an estimate, and what to do if that metadata is ever missing. See
   Workflow step 2.
-- `scripts/render_report.py` — run in Workflow step 4 to render the final
-  Markdown report; purely mechanical, no model call, same role
-  `skill-review/scripts/generate_static_report.py` plays there.
-- `../SURVEY.md` — survey of existing eval/cost-tracking tools and why
+- `SURVEY.md` — survey of existing eval/cost-tracking tools and why
   `skill-eval` is mostly custom-built rather than adopting one wholesale.
+- `CHANGELOG-skill-review-history.md` — the version history of
+  `skill-review` from before it was merged into this skill; kept as a
+  historical record, not maintained going forward.

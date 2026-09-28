@@ -23,7 +23,7 @@ except ImportError:
     print(json.dumps({"fatal_error": "PyYAML not installed. Run: pip install pyyaml"}))
     sys.exit(1)
 
-# Kept in sync with skill-review/scripts/structural_check.py's PACKAGING_EXCLUDE_DIRS.
+# Kept in sync with skill-eval/scripts/structural_check.py's PACKAGING_EXCLUDE_DIRS.
 EXCLUDE_DIRS = {"tests", ".git", "__pycache__", "dist", "node_modules", ".pytest_cache"}
 EXCLUDE_FILE_SUFFIXES = {".pyc"}
 EXCLUDE_FILENAMES = {".DS_Store"}

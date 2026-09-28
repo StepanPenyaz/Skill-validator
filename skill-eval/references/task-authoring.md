@@ -11,8 +11,8 @@ must run against both versions unchanged — otherwise any difference in
 cost or judgment could just be different tasks, not the version change.
 The task set is therefore stored as its own fixture, separate from either
 skill directory (the skill directory is exactly what varies between an
-old/new comparison; the task list is the constant). This mirrors
-`skill-review`'s `diff_reviews.py`: it diffs two skill directories against
+old/new comparison; the task list is the constant). This mirrors this
+skill's own `diff_reviews.py`: it diffs two skill directories against
 fixed check logic; `skill-eval` runs one fixed task file against two skill
 directories.
 
@@ -50,7 +50,7 @@ Pull tasks from these sources, in this priority order:
    they're for. Use one close to verbatim for the happy-path task.
 2. **Whatever actually changed, when comparing two versions.** Read the
    target skill's `CHANGELOG.md` entry for the version being compared
-   against (or run `skill-review`'s
+   against (or run
    `scripts/diff_reviews.py old_skill/ new_skill/` to see the findings
    delta directly), and write at least one task that specifically
    exercises that change. A task that doesn't touch the changed code path
@@ -75,8 +75,8 @@ functionality unexercised.
 ## Authoring is manual, for now
 
 Writing `tasks.yaml` is a manual step — a human (or Claude, on request)
-reads the target skill and writes the file by hand, the same way
-`skill-review`'s `bad-skill` fixture was hand-authored rather than
+reads the target skill and writes the file by hand, the same way the
+`tests/fixtures/bad-skill/` fixture was hand-authored rather than
 generated. An assisted or automated drafting step (e.g. `skill-eval`
 proposing candidate tasks from a skill's description/changelog for a human
 to approve) is explicitly out of scope until this manual version has
