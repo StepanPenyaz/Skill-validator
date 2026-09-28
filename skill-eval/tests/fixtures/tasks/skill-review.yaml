@@ -5,6 +5,11 @@
 # against skill-review. Kept frozen once used in a real comparison - the
 # task set is the constant, the skill-review directory being evaluated is
 # the variable.
+#
+# Historical note: skill-review was later merged into skill-eval itself
+# (see ../../../CHANGELOG.md) and no longer exists as a standalone target
+# skill directory, so these prompts can't be literally re-run as written.
+# Left frozen rather than rewritten, per EXAMPLE-RESULTS.md's note.
 
 tasks:
   - id: happy-path-whats-wrong-with-bad-skill

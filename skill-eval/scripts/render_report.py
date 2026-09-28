@@ -3,7 +3,7 @@
 render_report.py — renders skill-eval's collected run data as the final
 Markdown report: one table, one row per model tested.
 
-Purely mechanical, like skill-review/scripts/generate_static_report.py: by
+Purely mechanical, like this skill's own scripts/generate_static_report.py: by
 the time this runs, Workflow steps 1-3 have already collected everything
 it needs (the gate-check result, model/tokens/time per run, and a
 judgment Claude wrote in step 3) — this script does no judging of its
@@ -46,7 +46,7 @@ from pathlib import Path
 
 # On Windows, stdout otherwise defaults to the console's codepage (commonly
 # cp1252), which can't represent the bullet character or em dashes used
-# below — same fix as skill-review/scripts/generate_static_report.py.
+# below — same fix as scripts/generate_static_report.py.
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
         _stream.reconfigure(encoding="utf-8")
@@ -93,7 +93,7 @@ def render_gate_check_note(gate_check):
     Guidelines on surfacing a non-blocking gate result."""
     if not gate_check:
         return ""
-    lines = ["> **Gate check** (via skill-review) — passed, evaluation proceeded:"]
+    lines = ["> **Static review** (gate check) — passed, evaluation proceeded:"]
     stage_1a = gate_check.get("stage_1a") or {}
     warnings = stage_1a.get("structural_warnings_count", 0)
     if warnings:

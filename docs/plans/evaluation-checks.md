@@ -3,6 +3,17 @@
 > **Status: proposed, not yet implemented.** This document captures the agreed design for three
 > new `skill-review` checks before any code is written, so the approach can be reviewed
 > independently of the implementation diff.
+>
+> **Stale since the skill-review/skill-eval merge (see `skill-eval/CHANGELOG.md`'s
+> `[1.0.0]` entry).** `skill-review` no longer exists as a separate skill — its
+> static-review layer is now `skill-eval`'s Workflow step 1, and every
+> `skill-review/...` path below now lives under `skill-eval/...` instead (e.g.
+> `skill-review/references/severity_config.yaml` → `skill-eval/references/severity_config.yaml`).
+> This plan's premise in point 1 ("skill-eval already refuses to proceed on any
+> Blocker") is also being revisited separately — see that changelog entry's
+> "what did not change" note. Re-derive the exact paths/wording against the
+> current `skill-eval/` layout before implementing any of this, rather than
+> assuming the two-skill structure described below still holds.
 
 ## Context
 
