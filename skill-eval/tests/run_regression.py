@@ -290,6 +290,21 @@ def _():
     assert_true("sonnet" in models, "default_models should include 'sonnet' by default")
 
 
+@check("models_config.yaml: pricing table covers every default model with input/output/blended rates")
+def _():
+    import yaml
+    data = yaml.safe_load((ROOT / "references" / "models_config.yaml").read_text(encoding="utf-8"))
+    pricing = data.get("pricing")
+    assert_true(isinstance(pricing, dict) and len(pricing) > 0, "pricing should be a non-empty mapping")
+    for model in data.get("default_models", []):
+        assert_true(model in pricing, f"default model {model!r} should have a pricing entry")
+    for model, rates in pricing.items():
+        for key in ("input_usd_per_million", "output_usd_per_million", "blended_usd_per_million"):
+            assert_true(key in rates, f"pricing[{model!r}] missing {key!r}")
+        expected_blended = (rates["input_usd_per_million"] + rates["output_usd_per_million"]) / 2
+        assert_eq(rates["blended_usd_per_million"], expected_blended, f"pricing[{model!r}].blended_usd_per_million (should be the input/output midpoint)")
+
+
 # --- render_report.py: table rendering from a fixed, hand-written sample input ---
 @check("render_report.py: renders model/tokens/time/judgment correctly, escapes a pipe in a bullet")
 def _():
@@ -343,6 +358,16 @@ def _():
     assert_in("structure_and_progressive_disclosure", stdout, "category score row present")
     assert_in("sample-skill-review.md", stdout, "pointer to the full qualitative review file")
     assert_in("sonnet", stdout, "cost/judgment table still rendered after the static sections")
+    assert_in("$0.0074", stdout, "per-run cost rendered in the table")
+    assert_in("Total cost: $0.0074", stdout, "total-cost summary line")
+
+
+@check("render_report.py: a run with no cost_usd renders a dash, not '$0.00' or a missing Total cost line")
+def _():
+    stdout, returncode, stderr = run(SCRIPTS / "render_report.py", FIXTURES / "render-report-sample.json")
+    assert_eq(returncode, 0, f"exit code (stderr: {stderr.strip()})")
+    assert_in("| sonnet | ~1,234 (estimated) | - | 12.5s |", stdout, "missing cost_usd renders as a dash, not $0.00")
+    assert_true("Total cost" not in stdout, "no Total cost line when no run has a cost figure")
 
 
 @check("render_report.py (comparative): renders the structural + qualitative diff (via diff_reviews.py) and a side-by-side old/new cost table")
@@ -356,6 +381,9 @@ def _():
     assert_in("## Cost & Behavior Comparison", stdout, "cost comparison section header")
     assert_in("10,000 → 12,000 (+2,000)", stdout, "sonnet row's token delta rendered")
     assert_in("unknown (capture failed", stdout, "haiku row's missing old-side tokens rendered as an explicit gap, not silently dropped")
+    assert_in("$0.0600 → $0.0720 (+$0.0120)", stdout, "sonnet row's cost delta rendered")
+    assert_in("- → $0.0270", stdout, "haiku row's missing old-side cost rendered as a dash, not $0.00")
+    assert_in("Total cost: $0.0600 → $0.0990 (+$0.0390)", stdout, "total cost summary line, summed only over runs that had a figure")
 
 
 # ============================================================

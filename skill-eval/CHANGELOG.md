@@ -4,6 +4,38 @@ All notable changes to the `skill-eval` skill are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/);
 versioning follows [SemVer](https://semver.org/).
 
+## [1.3.0] — 2026-09-28
+
+### Added
+- **A "Cost (USD)" column, alongside token count, in both report shapes.**
+  `references/models_config.yaml` gains a `pricing` table — published
+  input/output $/M-token rates per model, plus a `blended_usd_per_million`
+  (the unweighted midpoint of the two) that Workflow step 2 uses to
+  compute `cost_usd = tokens / 1_000_000 * blended_rate`. This is a
+  labeled estimate, not an exact bill line item: `subagent_tokens` (see
+  `references/token-capture.md`) is a single blended total, not split into
+  input/output tokens, so the blended midpoint is the best available
+  approximation — the same honesty-over-precision treatment the token
+  count itself already gets. A model missing from the pricing table, or a
+  `null` token count (capture failed), reports `cost_usd: null` rather
+  than guessing — never a stop condition.
+  - Single-skill report: `runs[].cost_usd`, rendered as a new column and
+    (when any run has one) a "Total cost" line below the table.
+  - Comparative report: `runs[].{old,new}.cost_usd`, rendered as an
+    old→new pair with a computed delta per row, plus an old/new/delta
+    "Total cost" line — each side's total summed independently over
+    whichever runs have a figure on that side, so one model's missing
+    cost on one side doesn't zero out the other side's total.
+  - Both additive/optional, same pattern as `tokens`/`time_seconds` before
+    it — a payload without `cost_usd` renders a dash, not `$0.00` (which
+    could misread as a free run), and no "Total cost" line at all when no
+    run anywhere has a figure.
+- New regression checks: `models_config.yaml`'s `pricing` table covers
+  every `default_models` entry and each entry's `blended_usd_per_million`
+  is actually the input/output midpoint; both report shapes' cost
+  rendering (present, missing, and the total-cost line's partial-data
+  case).
+
 ## [1.2.0] — 2026-09-28
 
 ### Added

@@ -40,10 +40,18 @@ Two report shapes, auto-detected from `report_type` (default "single"):
       "tokens": 1850,
       "tokens_estimated": true,
       "time_seconds": 42.3,
+      "cost_usd": 0.0111,
       "judgment": ["bullet one", "bullet two", "bullet three"]
     }
   ]
 }
+
+`runs[].cost_usd` is optional (a run without it renders "-" in the Cost
+column) — see references/models_config.yaml's Pricing section for how
+it's computed (tokens x that model's blended $/M rate) and why it's a
+labeled estimate, never an exact bill line item, since `subagent_tokens`
+doesn't split input vs. output tokens. A single-skill report with any
+`cost_usd` present sums them into a "Total cost" line below the table.
 
 `gate_check` is optional context (renders as a blockquote note, plus a
 "Static Check Findings"/"Qualitative Review Summary" section when
@@ -75,8 +83,8 @@ see SKILL.md Workflow step 2 and references/task-authoring.md.
   "runs": [
     {
       "model": "sonnet",
-      "old": {"tokens": 1000, "tokens_estimated": false, "time_seconds": 10.0, "judgment": [...]},
-      "new": {"tokens": 1200, "tokens_estimated": false, "time_seconds": 12.0, "judgment": [...]}
+      "old": {"tokens": 1000, "tokens_estimated": false, "time_seconds": 10.0, "cost_usd": 0.006, "judgment": [...]},
+      "new": {"tokens": 1200, "tokens_estimated": false, "time_seconds": 12.0, "cost_usd": 0.0072, "judgment": [...]}
     }
   ]
 }
@@ -94,7 +102,9 @@ per-version tables a reader would have to line up by hand.
 value is labeled `(estimated)` — see references/token-capture.md for why
 it's an estimate today. A `null` `tokens` (either side) means token
 capture failed for that call — see references/token-capture.md — not that
-tokens is zero.
+tokens is zero. `runs[].{old,new}.cost_usd` is optional, same estimate as
+the single-skill shape; a comparative report with any `cost_usd` present
+sums old/new totals into a "Total cost" line after the table.
 
 Prints Markdown to stdout, or writes it to --out if given.
 """
@@ -151,6 +161,24 @@ def format_judgment(bullets):
     if not bullets:
         return "(no judgment recorded)"
     return "<br>".join(f"\u2022 {esc(b)}" for b in bullets)
+
+
+def format_cost(cost_usd):
+    """`cost_usd is None` means no cost was computed for this run (an older
+    payload predating this field, or a model missing from
+    references/models_config.yaml's pricing table) \u2014 rendered as a dash,
+    not "$0.00", so it can't be misread as a free run."""
+    if cost_usd is None:
+        return "-"
+    return f"${cost_usd:,.4f}"
+
+
+def sum_costs(costs):
+    """Sums the `cost_usd` values that are actually present; returns None
+    (not 0) if none are, so a report with no cost data anywhere doesn't
+    render a misleading "Total cost: $0.0000" line."""
+    present = [c for c in costs if c is not None]
+    return sum(present) if present else None
 
 
 def render_gate_check_note(gate_check):
@@ -281,14 +309,23 @@ def render_markdown(data):
         lines.append("No runs recorded.")
         return "\n".join(lines) + "\n"
 
-    lines.append("| Model Used | Number of Tokens | Time Spent | Claude's Judgment |")
-    lines.append("|---|---:|---:|---|")
+    lines.append("| Model Used | Number of Tokens | Cost (USD) | Time Spent | Claude's Judgment |")
+    lines.append("|---|---:|---:|---:|---|")
     for run in runs:
         model = esc(run.get("model", "?"))
         tokens = format_tokens(run.get("tokens"), run.get("tokens_estimated", False))
+        cost = format_cost(run.get("cost_usd"))
         time_spent = format_time(run.get("time_seconds"))
         judgment = format_judgment(run.get("judgment"))
-        lines.append(f"| {model} | {tokens} | {time_spent} | {judgment} |")
+        lines.append(f"| {model} | {tokens} | {cost} | {time_spent} | {judgment} |")
+
+    run_costs = [run.get("cost_usd") for run in runs]
+    total_cost = sum_costs(run_costs)
+    if total_cost is not None:
+        counted = sum(1 for c in run_costs if c is not None)
+        note = "" if counted == len(runs) else f" ({counted}/{len(runs)} runs had a cost figure)"
+        lines.append("")
+        lines.append(f"Total cost: {format_cost(total_cost)}{note}")
 
     return "\n".join(lines).rstrip() + "\n"
 
@@ -311,6 +348,16 @@ def format_time_pair(old_side, new_side):
         delta = new_seconds - old_seconds
         sign = "+" if delta >= 0 else ""
         return f"{old_str} \u2192 {new_str} ({sign}{delta:.1f}s)"
+    return f"{old_str} \u2192 {new_str}"
+
+
+def format_cost_pair(old_side, new_side):
+    old_cost, new_cost = old_side.get("cost_usd"), new_side.get("cost_usd")
+    old_str, new_str = format_cost(old_cost), format_cost(new_cost)
+    if old_cost is not None and new_cost is not None:
+        delta = new_cost - old_cost
+        sign = "+" if delta >= 0 else "-"
+        return f"{old_str} \u2192 {new_str} ({sign}${abs(delta):,.4f})"
     return f"{old_str} \u2192 {new_str}"
 
 
@@ -343,16 +390,30 @@ def render_comparative_markdown(data):
         lines.append("No runs recorded.")
         return "\n".join(lines) + "\n"
 
-    lines.append("| Model Used | Tokens (old \u2192 new) | Time (old \u2192 new) | Old Judgment | New Judgment |")
-    lines.append("|---|---:|---:|---|---|")
+    lines.append("| Model Used | Tokens (old \u2192 new) | Cost (old \u2192 new) | Time (old \u2192 new) | Old Judgment | New Judgment |")
+    lines.append("|---|---:|---:|---:|---|---|")
+    old_costs, new_costs = [], []
     for run in runs:
         model = esc(run.get("model", "?"))
         old_side, new_side = run.get("old") or {}, run.get("new") or {}
         tokens = format_tokens_pair(old_side, new_side)
+        cost_pair = format_cost_pair(old_side, new_side)
         time_pair = format_time_pair(old_side, new_side)
         old_judgment = format_judgment(old_side.get("judgment"))
         new_judgment = format_judgment(new_side.get("judgment"))
-        lines.append(f"| {model} | {tokens} | {time_pair} | {old_judgment} | {new_judgment} |")
+        lines.append(f"| {model} | {tokens} | {cost_pair} | {time_pair} | {old_judgment} | {new_judgment} |")
+        old_costs.append(old_side.get("cost_usd"))
+        new_costs.append(new_side.get("cost_usd"))
+
+    total_old, total_new = sum_costs(old_costs), sum_costs(new_costs)
+    if total_old is not None or total_new is not None:
+        lines.append("")
+        delta_note = ""
+        if total_old is not None and total_new is not None:
+            delta = total_new - total_old
+            sign = "+" if delta >= 0 else "-"
+            delta_note = f" ({sign}${abs(delta):,.4f})"
+        lines.append(f"Total cost: {format_cost(total_old)} \u2192 {format_cost(total_new)}{delta_note}")
 
     return "\n".join(lines).rstrip() + "\n"
 

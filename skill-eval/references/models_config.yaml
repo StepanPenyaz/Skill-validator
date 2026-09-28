@@ -8,3 +8,30 @@
 # on haiku and opus") - see SKILL.md's Decision Guidelines.
 default_models:
   - sonnet
+
+# Pricing lets Workflow step 2 compute an approximate USD cost per run.
+# `subagent_tokens` (see references/token-capture.md) is a single blended
+# total, not split into input/output tokens, so an exact bill-accurate
+# figure isn't derivable from it - blended_usd_per_million is the
+# unweighted midpoint of Anthropic's published per-model input/output
+# rates below, and every cost_usd this table produces is a labeled
+# estimate, never presented as an exact charge (same honesty principle as
+# token-capture.md's "estimated" label). Published rates as of
+# 2026-09-28 - update this table (and re-derive the blended midpoint) if
+# Anthropic's pricing changes; input/output rates are kept alongside the
+# blended figure so a future real input/output split (if one ever becomes
+# available from the Agent tool's result) can use them directly instead
+# of the midpoint approximation.
+pricing:
+  opus:
+    input_usd_per_million: 5.00
+    output_usd_per_million: 25.00
+    blended_usd_per_million: 15.00
+  sonnet:
+    input_usd_per_million: 2.00
+    output_usd_per_million: 10.00
+    blended_usd_per_million: 6.00
+  haiku:
+    input_usd_per_million: 1.00
+    output_usd_per_million: 5.00
+    blended_usd_per_million: 3.00

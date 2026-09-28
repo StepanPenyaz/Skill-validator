@@ -45,7 +45,10 @@ note — and giving two skill directories (an old/new version pair) instead
 of one produces a **comparative** report: the structural/qualitative diff
 between them plus a side-by-side cost/judgment table, old vs. new, per
 model — see `CHANGELOG.md`'s `[1.2.0]` entry and "Comparing two versions"
-below.
+below. Both report shapes also show an estimated USD cost per run
+alongside the token count, and a total across all runs — see "Cost
+estimation" under "Models configuration" below and `CHANGELOG.md`'s
+`[1.3.0]` entry.
 
 ## Two entry points in the static-review layer: gate mode and full review mode
 
@@ -237,6 +240,21 @@ models to a comparison:
 Either way, step 2 spawns one `Agent`-tool subagent per model in the
 resulting list, each given the same task and the same target skill — the
 model is the only thing that varies between rows of the final table.
+
+### Cost estimation
+
+`references/models_config.yaml`'s `pricing` table (published input/output
+$/M-token rates per model, plus a `blended_usd_per_million` — the
+unweighted midpoint of the two) is what step 2 uses to compute each run's
+`cost_usd`. This is a **labeled estimate**, not a bill-accurate figure:
+`subagent_tokens` (see `references/token-capture.md`) is a single blended
+total, not split into input and output tokens, so the blended midpoint is
+the best approximation available without a real split. If a future
+mechanism ever exposes the real input/output split, use the table's
+`input_usd_per_million`/`output_usd_per_million` directly instead of the
+midpoint. Update the table (and re-derive the blended figures) if
+Anthropic's published pricing changes — the file's own comment states
+which date the current values are current as of.
 
 ## Adding a task fixture for a new skill
 
