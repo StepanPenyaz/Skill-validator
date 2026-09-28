@@ -43,13 +43,18 @@ CATEGORY_ORDER = [
 SEVERITY_ORDER = {"Blocker": 0, "Warning": 1, "Info": 2}
 
 
-def render_markdown_report(skill_name, findings, security_scan=None):
+def render_markdown_report(skill_name, findings, security_scan=None, heading_level="#"):
+    """`heading_level` lets a caller embed this as a subsection of a bigger
+    report (e.g. skill-eval's render_report.py, which needs this table
+    under its own "## Static Review" heading, not a second top-level "#")
+    instead of duplicating this rendering logic there."""
+    sub_heading = heading_level + "#"
     counts = {"Blocker": 0, "Warning": 0, "Info": 0}
     for f in findings:
         counts[f["severity"]] += 1
 
     lines = [
-        f"# Static Check Report: {skill_name}",
+        f"{heading_level} Static Check Report: {skill_name}",
         "",
         f"{counts['Blocker']} blocker(s), {counts['Warning']} warning(s), "
         f"{counts['Info']} info-level suggestion(s).",
@@ -76,7 +81,7 @@ def render_markdown_report(skill_name, findings, security_scan=None):
         if not items:
             continue
         items = sorted(items, key=lambda f: SEVERITY_ORDER[f["severity"]])
-        lines.append(f"## {category}")
+        lines.append(f"{sub_heading} {category}")
         lines.append("")
         lines.append("| What's Wrong | Severity | Suggested Fix |")
         lines.append("|---|---|---|")

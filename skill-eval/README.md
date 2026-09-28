@@ -39,6 +39,14 @@ authored automatically rather than pausing to ask, and a per-model token
 capture failure is recorded as an explicit gap for that one row rather
 than aborting the whole run — see `CHANGELOG.md`'s `[1.1.0]` entry.
 
+A single-skill report embeds the static review directly (the findings
+table and the qualitative category-score summary), not just a pass/fail
+note — and giving two skill directories (an old/new version pair) instead
+of one produces a **comparative** report: the structural/qualitative diff
+between them plus a side-by-side cost/judgment table, old vs. new, per
+model — see `CHANGELOG.md`'s `[1.2.0]` entry and "Comparing two versions"
+below.
+
 ## Two entry points in the static-review layer: gate mode and full review mode
 
 Pick based on what's actually being asked for; neither is a lesser version
@@ -185,6 +193,35 @@ static-review layer was invoked as a separate `skill-review` skill and a
 Blocker/missing fixture still stopped the run — both mechanics changed
 since; see `CHANGELOG.md`).
 
+## Comparing two versions
+
+Give two skill directories instead of one (an old and a new version of the
+same skill) and the report becomes **comparative** instead of two separate
+single-skill reports:
+
+```
+Compare csv-cleaner v3 against v4.
+```
+
+`SKILL.md`'s Workflow runs steps 1-3 twice — once per version, sharing the
+same model list and the same task fixture (see "Reproducibility" below for
+why that has to be identical for both) — then step 4 renders one report,
+saved as `<old>-vs-<new>-eval.md`:
+
+- The structural/qualitative diff between the two versions
+  (`scripts/diff_reviews.py`'s own output and Markdown rendering, embedded
+  directly — see "Diffing across versions" below for what that covers).
+- One wide cost/judgment table, one row per model, old vs. new side by
+  side with a computed token/time delta — a reader compares each row's two
+  halves directly instead of cross-referencing two separate reports by
+  hand.
+
+A single-skill run (one directory given) still renders the static
+review's findings and qualitative summary inline in its own report, the
+same information a comparative run's diff section is computed *from* —
+see "What the static-review layer validates" above and
+`scripts/render_report.py`'s module docstring for both JSON shapes.
+
 ## Models configuration
 
 `references/models_config.yaml`'s `default_models` list (just `sonnet` out
@@ -311,10 +348,13 @@ against every fixture under `tests/fixtures/` (`good-skill`, `bad-skill`,
 `clean-skill-with-tricky-patterns`), `reconcile_reviews.py` against
 `consistency-runs`, `diff_reviews.py` against both `diff-old-skill`/
 `diff-new-skill` and `version-diff`, `models_config.yaml`'s shape,
-`render_report.py`'s table rendering (including pipe-escaping and the
-zero-runs case), a self-check, and packaging. Deliberately excludes
-anything requiring a live model call (task execution, judgment-writing,
-the qualitative full review mode itself).
+`render_report.py`'s rendering — the base table (pipe-escaping, the
+zero-runs case), a Blocker/blocked result's prominent warning, a missing
+token count's explicit gap note, the single-skill report's embedded
+static findings/qualitative summary, and the comparative report's diff
+sections + side-by-side cost table — a self-check, and packaging.
+Deliberately excludes anything requiring a live model call (task
+execution, judgment-writing, the qualitative full review mode itself).
 `.github/workflows/tests.yml` runs this same command on every push and PR.
 
 ## Repository layout
@@ -331,10 +371,10 @@ skill-eval/
 ├── .gitignore
 ├── scripts/
 │   ├── structural_check.py           # Deterministic compliance/structure/security checker (gate mode)
-│   ├── generate_static_report.py     # Renders the checker's findings as a Markdown report
+│   ├── generate_static_report.py     # Renders the checker's findings as a Markdown report (embeddable via heading_level)
 │   ├── reconcile_reviews.py          # Aggregates N independent qualitative review runs
-│   ├── diff_reviews.py               # Diffs two skill directories or two review.json files
-│   └── render_report.py              # Workflow step 4: renders the final cost/judgment table
+│   ├── diff_reviews.py               # Diffs two skill directories or two review.json files (embeddable via heading_level)
+│   └── render_report.py              # Workflow step 4: renders the final report (single-skill or comparative)
 ├── references/
 │   ├── rubric.md                     # Qualitative scoring rubric (full review mode)
 │   ├── schema.md                     # JSON output schema for <skill-name>-review.json
@@ -352,8 +392,12 @@ skill-eval/
         ├── consistency-runs/                 # 3 synthetic independent review runs, for reconcile_reviews.py
         ├── diff-old-skill/ + diff-new-skill/ # A before/after pair, for diff_reviews.py's deterministic mode
         ├── version-diff/                     # A before/after pair of review.json files, for diff_reviews.py's qualitative mode
-        ├── render-report-sample.json         # Fixed input for render_report.py tests
-        ├── render-report-empty.json          # Zero-runs edge case
+        ├── render-report-sample.json          # Fixed base input for render_report.py tests
+        ├── render-report-empty.json           # Zero-runs edge case
+        ├── render-report-blocked-sample.json  # Blocker/blocked result's prominent warning
+        ├── render-report-missing-tokens-sample.json # A per-model token-capture gap
+        ├── render-report-full-single-sample.json    # Embedded static findings + qualitative summary
+        ├── render-report-comparative-sample.json    # Comparative (two-version) report shape
         └── tasks/                            # Task fixtures for Workflow step 2, one per target skill
 ```
 
