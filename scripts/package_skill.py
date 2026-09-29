@@ -3,7 +3,7 @@
 package_skill.py — shared packaging tool for every skill in this repo.
 
 Zips a skill directory into a distributable `<name>.skill` bundle, stripping
-dev-only content (tests/fixtures, VCS metadata, caches) so packaging never
+dev-only content (evals/, step_reports/, static_report/, VCS metadata, caches) so packaging never
 ships more than one SKILL.md. Reused across skills in this solution instead
 of each one vendoring its own copy.
 
@@ -24,9 +24,9 @@ except ImportError:
     sys.exit(1)
 
 # Kept in sync with skill-eval/scripts/structural_check.py's PACKAGING_EXCLUDE_DIRS.
-EXCLUDE_DIRS = {"tests", ".git", "__pycache__", "dist", "node_modules", ".pytest_cache"}
+EXCLUDE_DIRS = {"evals", "step_reports", "static_report", ".git", "__pycache__", "dist", "node_modules", ".pytest_cache"}
 EXCLUDE_FILE_SUFFIXES = {".pyc"}
-EXCLUDE_FILENAMES = {".DS_Store"}
+EXCLUDE_FILENAMES = {".DS_Store", "final_report.md"}
 
 
 def fail(msg):

@@ -5,12 +5,8 @@ human-readable Markdown report: one table per category (Metadata, Structure,
 Permissions & Tool Usage, Security), each row showing what's wrong, its
 severity (Blocker/Warning/Info), and a suggested fix.
 
-This is still the deterministic Linter stage — every row is a raw pattern
-match from structural_check.py, with no qualitative judgment applied. It is
-NOT the final <skill-name>-review.md produced by the qualitative Static
-Quality pass (see SKILL.md Step 5) — that step still needs to confirm each
-Warning/Info-level candidate against real context before treating it as a
-scored finding.
+Fully deterministic: no model, no Claude session. Backs the
+/skill-static-review command and skill-eval's step 1.
 
 Usage:
     python generate_static_report.py <skill_directory> [--out <path>] [--force-security-scan]
@@ -45,9 +41,7 @@ SEVERITY_ORDER = {"Blocker": 0, "Warning": 1, "Info": 2}
 
 def render_markdown_report(skill_name, findings, security_scan=None, heading_level="#"):
     """`heading_level` lets a caller embed this as a subsection of a bigger
-    report (e.g. skill-eval's render_report.py, which needs this table
-    under its own "## Static Review" heading, not a second top-level "#")
-    instead of duplicating this rendering logic there."""
+    report instead of duplicating this rendering logic."""
     sub_heading = heading_level + "#"
     counts = {"Blocker": 0, "Warning": 0, "Info": 0}
     for f in findings:
@@ -133,6 +127,7 @@ def main():
     report = render_markdown_report(skill_name, result["findings"], result["metrics"].get("security_scan"))
 
     if out_path:
+        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
         Path(out_path).write_text(report, encoding="utf-8")
     else:
         print(report, end="")

@@ -7,7 +7,7 @@ only: a missing section is never a `compliance_errors` entry, since plenty of
 valid skills don't need all eight (a skill with an obviously narrow scope may
 not need a meaningful "When NOT to Use," for example).
 
-Kept as its own file, separate from `rubric.md` and `schema.md`, so the
+Kept as its own file, separate from `rubric.md` and `rubric-review-session.md`, so the
 outline itself can be revised independently as conventions evolve.
 
 ```markdown

@@ -1,4 +1,4 @@
-# Default model list for skill-eval's Workflow step 2 (run the target
+# Default model list for skill-eval's step 3 (run the target
 # skill per model). Editing this list changes the default for every
 # future skill-eval run - no code change needed, same pattern as
 # this skill's own references/severity_config.yaml.
@@ -7,9 +7,10 @@
 # default, ask for them at invocation time instead (e.g. "also test this
 # on haiku and opus") - see SKILL.md's Decision Guidelines.
 default_models:
+  - opus
   - sonnet
 
-# Pricing lets Workflow step 2 compute an approximate USD cost per run.
+# Pricing lets step 3 compute an approximate USD cost per run.
 # `subagent_tokens` (see references/token-capture.md) is a single blended
 # total, not split into input/output tokens, so an exact bill-accurate
 # figure isn't derivable from it - blended_usd_per_million is the
