@@ -9,6 +9,7 @@
 default_models:
   - opus
   - sonnet
+  - haiku
 
 # Pricing lets step 3 compute an approximate USD cost per run.
 # `subagent_tokens` (see references/token-capture.md) is a single blended
