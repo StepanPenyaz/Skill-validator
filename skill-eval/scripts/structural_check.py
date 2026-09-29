@@ -14,7 +14,7 @@ flat compliance_errors/structural_warnings lists (still derived from the
 same findings, for backward compatibility) and metrics. check_id is the
 same key used in references/severity_config.yaml — match on it (not on the
 free-text issue/suggestion, which can be reworded) when writing code or
-tests against specific checks; see tests/run_regression.py for an example.
+tests against specific checks.
 scripts/generate_static_report.py renders result["findings"] as a
 human-readable, per-category Markdown report.
 
@@ -25,7 +25,7 @@ run reports, without touching this script. This Blocker/Warning/Info scale
 is specific to this deterministic layer — it is distinct from the
 qualitative rubric's Minor/Major/Blocker/Pass scale used in the final
 <skill-name>-review.json/.md (see references/rubric.md and
-references/schema.md).
+the report format in SKILL.md).
 
 Usage:
     python structural_check.py <skill_directory>
@@ -51,7 +51,7 @@ IMPERATIVE_MARKERS = ("MUST", "NEVER", "ALWAYS", "SHOULD", "REQUIRED", "DO NOT")
 # Dev-only directories that never ship in the packaged skill (must mirror the exclude
 # list in tools/package_skill.py at the solution root) — a fixture skill's own SKILL.md
 # under one of these must not count against the "exactly one SKILL.md" packaging rule.
-PACKAGING_EXCLUDE_DIRS = {"tests", ".git", "__pycache__", "dist", "node_modules", ".pytest_cache"}
+PACKAGING_EXCLUDE_DIRS = {"evals", "step_reports", "static_report", ".git", "__pycache__", "dist", "node_modules", ".pytest_cache"}
 PORTABILITY_PATTERNS = [
     r"/Users/[A-Za-z0-9_.-]+",
     r"/home/(?!claude\b)[A-Za-z0-9_.-]+",
@@ -219,7 +219,7 @@ def add_finding(findings, severity_config, category, check_id, issue, suggestion
 
 
 def is_packaging_excluded(path, skill_path):
-    """True if `path` sits under a dev-only/build-artifact directory (tests/,
+    """True if `path` sits under a dev-only/build-artifact directory (evals/,
     __pycache__, etc. — see PACKAGING_EXCLUDE_DIRS) or is compiled bytecode.
     These never ship in the packaged skill, so they shouldn't be counted as
     bundled resources, scanned for security patterns, or flagged as orphaned."""
@@ -600,7 +600,7 @@ def run_checks(skill_path, force_security_scan=False):
         )
 
     # Multiple SKILL.md check (mirrors packaging requirement: exactly one, at <folder>/SKILL.md).
-    # Ignore dev-only dirs (e.g. tests/fixtures/*) since package_skill.py strips them before
+    # Ignore dev-only dirs (e.g. evals/*) since package_skill.py strips them before
     # packaging — a bundled fixture skill's SKILL.md isn't a real violation.
     all_skill_mds = [p for p in skill_path.rglob("SKILL.md")]
     shipped_skill_mds = [p for p in all_skill_mds if not is_packaging_excluded(p, skill_path)]
@@ -611,7 +611,7 @@ def run_checks(skill_path, force_security_scan=False):
             f"Found {len(shipped_skill_mds)} SKILL.md files that would ship in the package "
             f"(outside {sorted(PACKAGING_EXCLUDE_DIRS)}).",
             "Keep exactly one SKILL.md at the skill root; move or remove the others "
-            "(or place them under tests/ so packaging excludes them).",
+            "(or place them under evals/ so packaging excludes them).",
         )
     metrics["dev_only_skill_mds_excluded"] = [str(p.relative_to(skill_path)) for p in excluded_skill_mds]
 
