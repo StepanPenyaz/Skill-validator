@@ -37,3 +37,10 @@ pricing:
     input_usd_per_million: 1.00
     output_usd_per_million: 5.00
     blended_usd_per_million: 3.00
+
+# Used by the model recommendation in the final report (section 8).
+# Models whose similarity to the verified outputs is within tolerance_points
+# of the best model's are treated as equally good, and the cheapest of them
+# is recommended. Raise it to favour cost, lower it to favour quality.
+recommendation:
+  tolerance_points: 3

@@ -1,8 +1,8 @@
 ---
 name: skill-eval
-description: Evaluates a Claude Agent Skill end to end and writes one final report. It checks the skill's structure, reviews it against a rubric, runs it on several Claude models using evaluation inputs, measures tokens, time and cost, and compares the produced outputs with verified outputs. Use this whenever the user asks to evaluate, benchmark, audit, review, or measure a skill ("evaluate this skill", "how much does this skill cost to run", "how does this skill do on Opus vs Sonnet", "is this SKILL.md any good"). Also use it to compare two versions of the same skill (V1 vs V2). For a quick structure check only, tell the user to run /skill-static-review instead.
+description: Evaluates a Claude Agent Skill end to end and writes one final report. It checks the skill's structure, reviews it against a rubric, runs it on several Claude models using evaluation inputs, measures tokens, time and cost, and compares the produced outputs with verified outputs (with a similarity score), and recommends which model to use. Use this whenever the user asks to evaluate, benchmark, audit, review, or measure a skill ("evaluate this skill", "how much does this skill cost to run", "how does this skill do on Opus vs Sonnet", "is this SKILL.md any good"). Also use it to compare two versions of the same skill (V1 vs V2). For a quick structure check only, tell the user to run /skill-static-review instead.
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
   maintained_by: "Claude Code Skill Evaluation project"
 ---
 
@@ -13,7 +13,8 @@ metadata:
 1. Does `SKILL.md` follow `references/preferred-structure.md`? (structure check)
 2. Do its sections mean what they should, and is it safe? (rubric review)
 3. Does it do its job on real inputs, and what does that cost? (runs on several models)
-4. How close is each produced output to the verified output? (output comparison)
+4. How close is each produced output to the verified output? (output comparison and similarity)
+5. Which model should run the skill? (recommendation from similarity, tokens, time and cost)
 
 It can also compare two versions of one skill.
 
@@ -35,11 +36,12 @@ Work in the target skill's own folder, `<skill>/`. Reports go here:
 
 ```
 <skill>/
-├── step_reports/   01_structure.md, 02_rubric.md, 03_runs.md, 04_comparison_<model>.md
+├── step_reports/   01_structure.md, 02_rubric.md, 03_runs.md, 04_comparison_<model>.md, 05_similarity.md
 ├── static_report/  latest output of /skill-static-review
 ├── evals/
 │   ├── inputs/
 │   ├── verified-outputs/
+│   ├── similarity.yaml  optional: which similarity profile to use
 │   └── <skill>_<version>_outputs/
 │       ├── <skill>_<version>_<model>.md        produced output
 │       └── run_on_<model>_report.md            measured numbers
@@ -59,7 +61,7 @@ A "clean subagent" for a whole version run means: start a subagent that gets onl
 ## Step 1: Structure check
 
 1. Run `/skill-static-review <skill_dir>`. It writes `static_report/static_report.md`.
-2. Copy that report into `step_reports/01_structure.md`. Add one line saying whether `evals/inputs/` and `evals/verified-outputs/` exist.
+2. Copy that report into `step_reports/01_structure.md`. Add one line saying whether `evals/inputs/` and `evals/verified-outputs/` exist, and one saying which similarity profile applies (`evals/similarity.yaml`, or the default `document`). See `references/similarity-profiles.md`.
 3. If either eval folder is missing, do one of these:
    - Ask the user to add the files. Stop until they do.
    - Or start a generator subagent. Give it only the skill's name, description and `references/eval-data-authoring.md`. It writes `evals/inputs/` and `evals/verified-outputs/`. Tell the user the files were generated.
@@ -92,15 +94,30 @@ Take the model list from `references/models_config.yaml` (`default_models`), plu
    Total cost is `tokens / 1,000,000 × blended_usd_per_million` from `models_config.yaml`. If a value was not reported, write `unavailable`. Never guess.
 4. Write a short summary of all runs in `step_reports/03_runs.md`.
 
-## Step 4: Output comparison
+## Step 4: Output comparison and similarity
 
-For each model, start a fresh subagent. Give it `evals/verified-outputs/` and that model's produced output. Ask it to write `step_reports/04_comparison_<model>.md` containing only table rows, one per verified output:
+1. For each model, start a fresh subagent. Give it `evals/verified-outputs/` and that model's produced output. Ask it to write `step_reports/04_comparison_<model>.md` containing table rows, one per verified output:
 
-```
-| 01-api-order-cancel.md | <skill>_<version>_<model>.md | <model> | <version> | <what matches, what is missing> |
-```
+   ```
+   | 01-api-order-cancel.md | <skill>_<version>_<model>.md | <model> | <version> | <what matches, what is missing> |
+   ```
 
-The note must be specific, for example "does not contain the required test cases".
+   The note must be specific, for example "does not contain the required test cases".
+
+   After the rows, ask for one last line in this form:
+
+   ```
+   Verdict: <Equivalent | Minor gaps | Major gaps> - <one sentence>
+   ```
+
+   `Major gaps` means a requirement of the verified output is missing or contradicted. `Minor gaps` means differences in wording, detail or extra content only. `Equivalent` means the same requirements. This is the quality judgement. It is the only place where the content is judged.
+2. Run the similarity script. It needs no Claude session:
+
+   ```bash
+   python skill-eval/scripts/compute_similarity.py <skill_dir>
+   ```
+
+   It writes `step_reports/05_similarity.md`: per model and per case, the similarity to the verified output and its three parts, and the facts it did not find.
 
 ## Step 5: Final report
 
@@ -112,17 +129,20 @@ python skill-eval/scripts/build_final_report.py <skill_dir> [--baseline <older_s
 
 It writes `<skill_dir>/final_report.md` with numbered sections:
 
-1. Summary (with three charts when two versions are compared: token usage, total cost, time spent)
+1. Summary (names the recommended model; with three charts when two versions are compared: token usage, total cost, time spent)
 2. Skill name
 3. Skill description
 4. Run results
-5. Output comparison
+5. Output comparison (notes, and similarity per case)
 6. Skill structure check
 7. Skill rubric review
+8. Model recommendation (table of similarity, verdict, tokens, time and cost per model, the recommended model, and why)
+
+The recommendation is computed by a fixed rule, not by a model: drop models with a `Major gaps` verdict, take the models within `recommendation.tolerance_points` of the best similarity, and recommend the cheapest of them. If `step_reports/05_similarity.md` is missing, section 8 says so.
 
 When `--baseline` is used, the tables show V1, V2 and the change.
 
-Tell the user where `final_report.md` is and give the top-line findings.
+Tell the user where `final_report.md` is, which model is recommended and why, and the top-line findings.
 
 # Rules
 
@@ -130,7 +150,8 @@ Tell the user where `final_report.md` is and give the top-line findings.
 - Never use the static review's findings to skip later steps. Report them and keep going.
 - Cost, tokens and time must be measured values. If one is missing, write `unavailable`.
 - Do not produce `.json` reports. All reports are Markdown.
-- Do not give the skill a numeric score. Notes must say what is right or wrong.
+- Do not give the skill a numeric score. The similarity number scores a produced output against its verified output, never the skill. Notes must say what is right or wrong.
+- The model recommendation is only what the rule in step 5 produces. Do not override it by hand. If the user wants a different trade-off, change `recommendation.tolerance_points` for this run and say so.
 
 # Decision Guidelines
 
@@ -143,9 +164,11 @@ Tell the user where `final_report.md` is and give the top-line findings.
 - `references/preferred-structure.md`: the structure `SKILL.md` is checked against.
 - `references/rubric.md`: the rubric for step 2.
 - `references/rubric-review-session.md`: model and token limit for step 2.
-- `references/models_config.yaml`: run models and prices.
+- `references/models_config.yaml`: run models, prices and the recommendation tolerance.
+- `references/similarity-profiles.md`, `references/similarity_config.yaml`: what similarity means for each kind of skill.
 - `references/severity_config.yaml`: severity of each static check.
 - `references/eval-data-authoring.md`: how to write `evals/inputs/` and `evals/verified-outputs/`.
 - `references/token-capture.md`: why harness-reported tokens are used.
 - `scripts/structural_check.py`, `scripts/generate_static_report.py`: the static review.
-- `scripts/build_final_report.py`: builds the final report.
+- `scripts/compute_similarity.py`: similarity of each produced output to the verified output.
+- `scripts/build_final_report.py`: builds the final report, including the model recommendation.

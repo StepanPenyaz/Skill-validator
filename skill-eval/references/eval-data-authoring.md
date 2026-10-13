@@ -14,6 +14,8 @@ evals/
 - A verified output is what a correct run should produce. A person should have read it and agreed it is right. Generated files are only a starting point; tell the user they were generated so they can check them.
 - The same inputs are used for every model and for both versions when two versions are compared. Do not reword an input between runs that will be compared.
 
+- A verified output also fixes what "similar" means. The default similarity profile (`document`) counts the numbers and backticked identifiers in it, so write concrete values (limits, codes, field names) in backticks where they are required. For other kinds of skill, see `similarity-profiles.md` and add `evals/similarity.yaml`.
+
 ## What to cover
 
 Take cases from these places, in this order:
