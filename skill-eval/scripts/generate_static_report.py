@@ -9,12 +9,13 @@ Fully deterministic: no model, no Claude session. Backs the
 /skill-static-review command and skill-eval's step 1.
 
 Usage:
-    python generate_static_report.py <skill_directory> [--out <path>] [--force-security-scan]
+    python generate_static_report.py <skill_directory> [--out <path>] [--force-security-scan] [--fail-on-blocker]
 
 Prints Markdown to stdout, or writes it to --out if given. --force-security-scan
 bypasses structural_check.py's cost-conditional gate (see its
 has_shell_or_network_capability) and always runs the dangerous-shell-pattern,
-prompt-injection, and undeclared-host scans.
+prompt-injection, and undeclared-host scans. --fail-on-blocker makes the exit code 2
+(after the report is written) when there are Blocker findings: skill-eval stops there.
 """
 
 import sys
@@ -95,11 +96,14 @@ def main():
     force_security_scan = "--force-security-scan" in args
     if force_security_scan:
         args = [a for a in args if a != "--force-security-scan"]
+    fail_on_blocker = "--fail-on-blocker" in args
+    if fail_on_blocker:
+        args = [a for a in args if a != "--fail-on-blocker"]
 
     if len(args) < 1:
         print(
             "Error: Usage: python generate_static_report.py <skill_directory> "
-            "[--out <path>] [--force-security-scan]",
+            "[--out <path>] [--force-security-scan] [--fail-on-blocker]",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -131,6 +135,10 @@ def main():
         Path(out_path).write_text(report, encoding="utf-8")
     else:
         print(report, end="")
+
+    # skill-eval's gate: exit code 2 means the report has Blocker findings, so the evaluation stops here.
+    if fail_on_blocker and any(f["severity"] == "Blocker" for f in result["findings"]):
+        sys.exit(2)
 
 
 if __name__ == "__main__":

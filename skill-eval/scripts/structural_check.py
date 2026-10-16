@@ -12,14 +12,14 @@ check_id, severity, an issue description, a suggested fix, and a location
 when applicable) in result["findings"], in addition to the long-standing
 flat compliance_errors/structural_warnings lists (still derived from the
 same findings, for backward compatibility) and metrics. check_id is the
-same key used in references/severity_config.yaml — match on it (not on the
+same key used in config.yaml (static_checks) — match on it (not on the
 free-text issue/suggestion, which can be reworded) when writing code or
 tests against specific checks.
 scripts/generate_static_report.py renders result["findings"] as a
 human-readable, per-category Markdown report.
 
 Severity (Blocker/Warning/Info) for each check is NOT hardcoded here — it's
-looked up from references/severity_config.yaml at run time, keyed by a
+looked up from config.yaml (static_checks) at run time, keyed by a
 stable check_id per check-type. Edit that file to retune what any future
 run reports, without touching this script. This Blocker/Warning/Info scale
 is specific to this deterministic layer — it is distinct from the
@@ -60,7 +60,7 @@ PORTABILITY_PATTERNS = [
 
 # Recommended (not required) SKILL.md body section outline — see
 # references/preferred-structure.md. Presence/absence is only ever reported
-# as a soft (Info, by default — see severity_config.yaml) signal, never a
+# as a soft (Info, by default — see config.yaml) signal, never a
 # hardcoded Blocker.
 PREFERRED_SECTIONS = [
     "Purpose",
@@ -99,7 +99,7 @@ SECURITY_SCAN_GATED_CHECK_IDS = (
 )
 
 # Hardcoded secret/credential patterns (check_id: hardcoded_secret — Blocker
-# by default in severity_config.yaml). Unlike the other pattern groups
+# by default in config.yaml). Unlike the other pattern groups
 # below, this one skips the "candidate" treatment because the cost of
 # shipping a real credential is high and these patterns are narrow enough
 # that false positives are rare. Matched values are redacted before being
@@ -167,7 +167,7 @@ CATEGORY_PERMISSIONS = "Permissions & Tool Usage"
 CATEGORY_SECURITY = "Security"
 
 VALID_SEVERITIES = {"Blocker", "Warning", "Info"}
-SEVERITY_CONFIG_PATH = Path(__file__).resolve().parent.parent / "references" / "severity_config.yaml"
+CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
 
 
 def fail(msg):
@@ -176,23 +176,23 @@ def fail(msg):
 
 
 def load_severity_config():
-    """Loads references/severity_config.yaml into {check_id: {"what_is_wrong":
+    """Loads config.yaml (static_checks) into {check_id: {"what_is_wrong":
     ..., "severity": ...}}. Raises ValueError with a human-readable message
     on any problem (missing file, bad YAML, missing/invalid severity) — the
     caller turns that into a fatal_error rather than a raw traceback."""
-    if not SEVERITY_CONFIG_PATH.exists():
-        raise ValueError(f"Severity config not found at {SEVERITY_CONFIG_PATH}.")
+    if not CONFIG_PATH.exists():
+        raise ValueError(f"Severity config not found at {CONFIG_PATH}.")
     try:
-        raw = yaml.safe_load(SEVERITY_CONFIG_PATH.read_text(encoding="utf-8"))
+        raw = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
     except yaml.YAMLError as e:
-        raise ValueError(f"Invalid YAML in {SEVERITY_CONFIG_PATH}: {e}")
-    checks = (raw or {}).get("checks")
+        raise ValueError(f"Invalid YAML in {CONFIG_PATH}: {e}")
+    checks = (raw or {}).get("static_checks")
     if not isinstance(checks, dict) or not checks:
-        raise ValueError(f"{SEVERITY_CONFIG_PATH} must have a non-empty top-level 'checks' mapping.")
+        raise ValueError(f"{CONFIG_PATH} must have a non-empty top-level 'static_checks' mapping.")
     for check_id, entry in checks.items():
         if not isinstance(entry, dict) or entry.get("severity") not in VALID_SEVERITIES:
             raise ValueError(
-                f"{SEVERITY_CONFIG_PATH}: check '{check_id}' has an invalid or missing 'severity' "
+                f"{CONFIG_PATH}: check '{check_id}' has an invalid or missing 'severity' "
                 f"(must be one of {sorted(VALID_SEVERITIES)})."
             )
     return checks
@@ -200,12 +200,12 @@ def load_severity_config():
 
 def add_finding(findings, severity_config, category, check_id, issue, suggestion, location=None):
     """severity is resolved from severity_config[check_id] rather than being
-    passed in literally — see references/severity_config.yaml. A check_id
+    passed in literally — see config.yaml (static_checks). A check_id
     used here that isn't present in the config is a programming error, so it
     raises immediately rather than silently defaulting."""
     if check_id not in severity_config:
         raise KeyError(
-            f"check_id '{check_id}' has no entry in {SEVERITY_CONFIG_PATH} — "
+            f"check_id '{check_id}' has no entry in {CONFIG_PATH} — "
             "add one before using it in a finding."
         )
     findings.append({
@@ -368,7 +368,7 @@ def check_metadata_version(frontmatter, findings, severity_config):
 
 def check_preferred_structure_sections(body):
     """Soft signal only — see references/preferred-structure.md. A missing
-    section defaults to Info (see severity_config.yaml), never a Blocker;
+    section defaults to Info (see config.yaml), never a Blocker;
     many skills legitimately don't need all eight (e.g. no meaningful
     'When NOT to Use')."""
     present = []
@@ -535,7 +535,7 @@ def find_undeclared_external_hosts(files, description):
 def run_checks(skill_path, force_security_scan=False):
     """Runs every check against skill_path and returns the full result dict
     (or {"fatal_error": ...} on setup problems — missing SKILL.md, or a
-    missing/invalid severity_config.yaml). Doesn't print or exit, so callers
+    missing/invalid config.yaml). Doesn't print or exit, so callers
     other than this script's own CLI (e.g. scripts/generate_static_report.py)
     can call it directly.
 

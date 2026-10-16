@@ -1,17 +1,22 @@
 # Token, time and cost capture
 
-`skill-eval` reports tokens, time and cost for each model run. All three must be measured values.
+`skill-eval` reports tokens, time and cost for each model. All three must be measured values.
 
 ## Where the numbers come from
 
-- **Tokens:** the `Agent` tool's own result for the run's subagent carries `subagent_tokens`, a single total (input and output together). The orchestrator copies it.
-- **Time:** the elapsed time of that same `Agent` call (`duration_ms`, or a timestamp taken before and after the call).
-- **Cost:** `tokens / 1,000,000 × blended_usd_per_million` from `models_config.yaml`. The blended rate is the midpoint of the model's input and output price, because the total is not split. The cost is therefore computed from a measured token count, and is approximate to that extent.
+`scripts/run_skill.py` runs every case in its own `claude -p` process with `--output-format stream-json`. The final `result` event of that process carries the numbers, and the script saves them in `<input>.json` next to the output:
 
-## Why not ask the subagent for its own count
+- **Tokens:** `usage` gives input, output, cache read and cache creation tokens. `Tokens used` in `run_on_<model>_report.md` is their sum, so the split is also written in the report. Cache reads are cheap but they are tokens the model processed.
+- **Cost:** `total_cost_usd` as reported by the process. It is the real figure for that run, not an estimate from a blended price.
+- **Time:** `duration_ms` of the process.
+- **Turns and tools:** `num_turns`, and the tool calls counted in the transcript (`<input>.jsonl`). The transcript also shows whether the `Skill` tool was used.
 
-A subagent can only see its visible prompt and answer. It cannot see tool definitions, tool results or reasoning tokens. In a past run a subagent reported about 5,500 tokens for a call whose harness-reported total was 68,731, about 12 times lower. So the subagent's own number is never used.
+`Tokens used`, `Time spent` and `Total cost` in `run_on_<model>_report.md` are means per full run (all inputs), over the model's runs.
 
 ## When a number is missing
 
-If the `Agent` result carries no `subagent_tokens` or no duration (for example when the run went through a `Workflow` script's `agent()` wrapper), write `unavailable` in `run_on_<model>_report.md`. Do not estimate. The cost is `unavailable` too. Continue with the next model.
+If the process did not return a result (not logged in, killed by the timeout, crashed), the case is recorded as `failed` with the reason, and its numbers are `unavailable`. A run report value is `unavailable` when any case of a run did not report it. Do not estimate. A model with too few complete runs is reported as `insufficient`.
+
+## Why not ask the model for its own count
+
+A model can only see its visible prompt and answer, not tool definitions, tool results or reasoning tokens. In a past run a subagent reported about 5,500 tokens for a call whose harness-reported total was 68,731, about 12 times lower. Only numbers reported by the harness are used.

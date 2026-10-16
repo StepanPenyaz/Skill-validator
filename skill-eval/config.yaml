@@ -1,0 +1,186 @@
+# skill-eval settings: the one place to change how an evaluation runs.
+# Editing a value takes effect on the next run, no code change needed.
+#
+# Sections:
+#   default_models, runs_per_model, runner   which models run the skill, how often, and with which limits (run_skill.py)
+#   stability                                when a model counts as unstable (compute_similarity.py)
+#   recommendation                           tolerance of the model recommendation (build_final_report.py)
+#   rubric_review                            model and token limit of the rubric review (step 2, read by Claude)
+#   default_profile, profiles                profiles: everything that depends on the kind of skill (references/profiles.md)
+#   static_checks                            severity of each structure check (structural_check.py)
+
+# ---------- model runs ----------
+
+# Default models for step 4 (run the target skill per model). To compare more
+# models in a single run without changing this list, pass --models to
+# run_skill.py (for example "also test this on haiku and opus").
+default_models:
+  - opus
+  - sonnet
+  - haiku
+
+# Repeats: every model runs the skill on every eval input this many times,
+# each case in its own `claude -p` process. `run_skill.py --runs` overrides it.
+runs_per_model: 3
+
+# Limits for one `claude -p` process (one case of one run).
+runner:
+  jobs: 3                  # processes at the same time
+  timeout_seconds: 600     # a case that takes longer is recorded as failed
+  max_budget_usd: 1.0      # passed as --max-budget-usd
+  # The prompt and the allowed tools depend on the kind of skill: see the profile below.
+
+# ---------- stability and recommendation ----------
+
+# Stability of a model, measured on repeats of the SAME input.
+# Case spread = highest minus lowest similarity of one case over the model's complete runs.
+stability:
+  max_case_spread_points: 10   # mean case spread above this makes the model "unstable"; starting value, calibrate on real data
+  min_valid_runs: 2            # complete runs needed to rate a model (capped at runs_per_model)
+  low_case_points: 60          # an input below this in every complete run of every model is flagged: check the verified output or the metric
+
+# Models whose similarity to the verified outputs is within the tolerance of
+# the best model's are treated as equally good, and the cheapest of them is
+# recommended. The tolerance is the largest spread between the repeated runs
+# of the models still in the race (the run-to-run noise), and never below
+# tolerance_points. With a single run per model, tolerance_points is used as is.
+recommendation:
+  tolerance_points: 3
+
+# ---------- rubric review (step 2) ----------
+
+# The orchestrator reads these two values and passes them to the rubric-review subagent.
+rubric_review:
+  model: opus          # any model name Claude Code accepts
+  token_limit: 60000   # the most tokens the subagent may use. If the review is not finished when the limit is near,
+                       # it must stop and say which rubric categories it did not cover.
+
+# ---------- profiles ----------
+
+# A profile holds everything that depends on WHAT the skill works with: which files are verified outputs,
+# how a model is asked and which tools it gets, where the output is collected from, and how it is scored
+# against the verified output (similarity, 0-100%, a score of the OUTPUT, never of the skill).
+# The profile used is default_profile, or the one given with `--profile <name>` to run_skill.py and
+# compute_similarity.py. How to add one: references/profiles.md.
+default_profile: document
+
+profiles:
+  document:
+    status: implemented
+    description: Skills that turn a text task into a structured text result, one Markdown file per input (tickets, specs, reports).
+    verified_glob: "*.md"      # files of evals/verified-outputs/ that are verified outputs
+    # The request given to every model for every input. {input_file} is the input's file name.
+    # It names the skill on purpose. Word it like a user's request to see whether the skill triggers by itself.
+    # The result is read from the reply, so do not ask for a file to be written.
+    prompt: "Use the available skill to process the file {input_file}. Reply with the result only."
+    allowed_tools: [Skill, Read, Glob, Grep]
+    weights:
+      fact_recall: 0.60        # share of concrete facts from the verified output found in the produced one
+      content_overlap: 0.25    # unigram + bigram F1 between the two texts
+      structure: 0.15          # required sections present, and item count close to the verified one
+    required_sections: [Title, Description, AC]
+    count_section: AC          # section whose numbered items are counted
+    # Units that change the meaning of a number: "5 min" and "5 attempts" are
+    # different facts, "5 minutes" and "5 min" are the same one. Numbers
+    # followed by any other word are compared as bare numbers.
+    unit_aliases:
+      ms: ms
+      milliseconds: ms
+      millisecond: ms
+      s: s
+      sec: s
+      secs: s
+      second: s
+      seconds: s
+      min: min
+      mins: min
+      minute: min
+      minutes: min
+      h: h
+      hour: h
+      hours: h
+      day: day
+      days: day
+      "%": "%"
+      kb: kb
+      mb: mb
+      gb: gb
+
+  structured-data:
+    status: planned
+    description: JSON, YAML or CSV. Field-level exact match on keys and values.
+
+  code:
+    status: planned
+    description: Code or scripts. Share of checks (tests) that pass, using a check command.
+
+  classification:
+    status: planned
+    description: Labels or decisions. Exact-match accuracy over the cases.
+
+# ---------- static checks (step 1) ----------
+
+# Severity policy for structural_check.py's static findings.
+#
+# Edit `severity` below to change what a validation run reports as
+# Blocker / Warning / Info for that check. `severity` must be exactly one of:
+# Blocker, Warning, Info.
+#
+# `what_is_wrong` is a short label for humans scanning this table - it is
+# not used programmatically. The actual per-occurrence issue text reported
+# in a finding (e.g. the specific bad name, the specific file:line) is
+# still generated dynamically by structural_check.py; this section only
+# controls severity.
+#
+# Blocker  -> counted in compliance_errors; the skill will fail to parse,
+#             package, or ship safely. A Blocker stops the evaluation (step 1 gate).
+# Warning  -> counted in structural_warnings; a real signal that needs
+#             confirmation against context before being treated as a
+#             finding (see references/rubric.md).
+# Info     -> counted in structural_warnings; a soft, optional suggestion.
+static_checks:
+  frontmatter_missing:
+    what_is_wrong: "SKILL.md has no YAML frontmatter block."
+    severity: Blocker
+  frontmatter_malformed:
+    what_is_wrong: "Frontmatter delimiters found but the block is malformed."
+    severity: Blocker
+  frontmatter_invalid_yaml:
+    what_is_wrong: "Frontmatter contains invalid YAML."
+    severity: Blocker
+  frontmatter_not_mapping:
+    what_is_wrong: "Frontmatter is not a YAML dictionary/mapping."
+    severity: Blocker
+  frontmatter_unexpected_keys:
+    what_is_wrong: "Frontmatter has a key outside the allowed list."
+    severity: Blocker
+  skill_md_filename_case:
+    what_is_wrong: "Skill file's name doesn't exactly match 'SKILL.md'."
+    severity: Blocker
+  name_missing: {what_is_wrong: "Frontmatter 'name' is missing.", severity: Blocker}
+  name_wrong_type: {what_is_wrong: "Frontmatter 'name' is not a string.", severity: Blocker}
+  name_not_kebab_case: {what_is_wrong: "Frontmatter 'name' is not kebab-case.", severity: Blocker}
+  name_bad_hyphens: {what_is_wrong: "'name' has a leading/trailing/consecutive hyphen.", severity: Blocker}
+  name_too_long: {what_is_wrong: "'name' is longer than 64 characters.", severity: Blocker}
+  name_folder_mismatch: {what_is_wrong: "'name' doesn't match the containing folder.", severity: Warning}
+  description_missing: {what_is_wrong: "Frontmatter 'description' is missing.", severity: Blocker}
+  description_wrong_type: {what_is_wrong: "'description' is not a string.", severity: Blocker}
+  description_angle_brackets: {what_is_wrong: "Description contains '<' or '>'.", severity: Blocker}
+  description_too_long: {what_is_wrong: "Description is longer than 1024 characters.", severity: Blocker}
+  description_too_short: {what_is_wrong: "Description is fewer than 8 words.", severity: Warning}
+  description_no_trigger_cue: {what_is_wrong: "Description has no 'when to use' cue.", severity: Warning}
+  metadata_version_missing: {what_is_wrong: "'metadata.version' is not set.", severity: Info}
+  body_too_long: {what_is_wrong: "SKILL.md body is longer than 500 lines.", severity: Warning}
+  preferred_structure_sections_missing: {what_is_wrong: "Recommended SKILL.md section(s) missing.", severity: Info}
+  multiple_skill_md_files: {what_is_wrong: "More than one SKILL.md would ship.", severity: Blocker}
+  orphaned_resource_file: {what_is_wrong: "Bundled resource file never mentioned by name.", severity: Warning}
+  large_reference_missing_toc: {what_is_wrong: "Reference file >300 lines has no table of contents.", severity: Warning}
+  portability_path: {what_is_wrong: "Hardcoded user-specific/absolute path found.", severity: Warning}
+  tool_declared_unreferenced: {what_is_wrong: "Tool declared in allowed-tools but never used.", severity: Warning}
+  tool_referenced_undeclared: {what_is_wrong: "Tool used in the body but not declared.", severity: Warning}
+  hardcoded_secret: {what_is_wrong: "Hardcoded secret/credential pattern found.", severity: Blocker}
+  dangerous_shell_pattern: {what_is_wrong: "Potentially dangerous shell command pattern found.", severity: Warning}
+  prompt_injection_phrase: {what_is_wrong: "Phrase resembling instruction-override language.", severity: Warning}
+  prohibited_action_phrase: {what_is_wrong: "Phrase resembling a prohibited high-risk action.", severity: Warning}
+  undeclared_external_host: {what_is_wrong: "External host referenced but never named in the description.", severity: Warning}
+  must_never_line: {what_is_wrong: "Line contains a MUST/NEVER directive.", severity: Warning}
