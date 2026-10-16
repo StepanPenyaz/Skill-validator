@@ -11,10 +11,10 @@ evals/
 ## Rules
 
 - One input file and one verified output file per case. Give a pair matching names, for example `inputs/01-api-order-cancel.md` and `verified-outputs/01-api-order-cancel.md`.
-- A verified output is what a correct run should produce. A person should have read it and agreed it is right. Generated files are only a starting point; tell the user they were generated so they can check them.
+- A verified output is what a correct run should produce. A person should have read it and agreed it is right. Generated files are only a starting point: `evals/GENERATED.md` marks them, and both reports then say they need review.
 - The same inputs are used for every model and for both versions when two versions are compared. Do not reword an input between runs that will be compared.
 
-- A verified output also fixes what "similar" means. The default similarity profile (`document`) counts the numbers and backticked identifiers in it, so write concrete values (limits, codes, field names) in backticks where they are required. For other kinds of skill, see `similarity-profiles.md` and add `evals/similarity.yaml`.
+- A verified output also fixes what "similar" means. The default similarity profile (`document`) counts the numbers and backticked identifiers in it, so write concrete values (limits, codes, field names) in backticks where they are required. For other kinds of skill, see `profiles.md`.
 
 ## What to cover
 
@@ -28,4 +28,8 @@ Three to five cases are enough. Keep each case small, so a run stays cheap.
 
 ## Generating the files
 
-When the folders are missing and the user wants them generated, use a subagent in a fresh context. Give it only the skill's name and description, and this file. It must not read the skill's body or any earlier reports, so the cases are not shaped by the skill's own implementation.
+When `evals/inputs/` or `evals/verified-outputs/` is missing or empty, `skill-eval` generates the files with a subagent in a fresh context and does not wait for the user. Give it only the skill's name and description, and this file. It must not read the skill's body or any earlier reports, so the cases are not shaped by the skill's own implementation. The orchestrator then writes `evals/GENERATED.md` with the list of files created.
+
+## How an input is given to the model
+
+`scripts/run_skill.py` copies one input into a clean project next to the installed skill and sends the prompt `runner.prompt` of `config.yaml`, with `{input_file}` replaced by the input's file name. The result is read from the reply.
