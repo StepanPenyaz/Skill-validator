@@ -26,8 +26,8 @@ Writes two files:
                                                   4 Model recommendation, and 5 Blocking structure findings
                                                   when the structure check found Blockers
 
-The model recommendation is a deterministic rule over similarity, stability, verdict, tokens, time and
-cost (see recommend()).
+The model recommendation is a deterministic rule: the highest similarity per dollar, with a failed run
+counted as 0 (see recommend()).
 
 With --baseline, <older_skill_dir> must already contain a detailed_final_report.md (produced by this
 script). Its tables are parsed and shown next to the current ones with V1 / V2 / delta columns, and the
@@ -50,7 +50,6 @@ SIM_SUMMARY_HEADER = "| Model | Similarity"
 SIM_CASE_HEADER = "| Case | Model | Similarity"
 SIM_RUN_HEADER = "| Model | Run | Similarity"
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
-DEFAULT_TOLERANCE = 3.0
 VERDICTS = {"equivalent": 0, "minor gaps": 1, "disputed": 2, "major gaps": 3}
 VERDICT_LABELS = {"equivalent": "Equivalent", "minor gaps": "Minor gaps", "disputed": "Disputed",
                   "major gaps": "Major gaps"}
@@ -291,14 +290,6 @@ def load_config():
         return {}
 
 
-def read_tolerance():
-    try:
-        cfg = load_config()
-        return float((cfg.get("recommendation") or {}).get("tolerance_points", DEFAULT_TOLERANCE))
-    except (OSError, ValueError, yaml.YAMLError):
-        return DEFAULT_TOLERANCE
-
-
 def blocker_rows(structure_text):
     """[(what's wrong, suggested fix)] for the Blocker rows of the static report."""
     out = []
@@ -382,36 +373,37 @@ def compare_run_table(old_runs, new_runs, v1, v2):
     return lines
 
 
-def recommend(rows, tolerance):
+def points_per_dollar(r):
+    """Similarity points per dollar of a row (None when similarity or cost is missing, or the cost is 0)."""
+    if r["similarity"] is None or not r["cost"]:
+        return None
+    return r["similarity"] / r["cost"]
+
+
+def recommend(rows):
     """Pick the model to run the skill with. Pure function, no I/O.
 
-    rows: dicts with model, similarity (0-100 or None), status (stability: stable, single run, unstable,
-    insufficient or None), spread (spread of the run scores or None), verdict (None, equivalent, minor gaps,
-    disputed, major gaps), tokens, time, cost. Rule:
-      1. drop models without similarity or cost, with too few complete runs (insufficient), with unstable
-         results, or with a "major gaps" verdict (disputed verdicts stay, flagged);
-      2. tolerance = the largest spread between the repeated runs of the remaining models, never below
-         `tolerance` (the noise of the measurement);
-      3. candidates = models within that tolerance of the best remaining similarity;
-      4. recommend the cheapest candidate (ties: faster, then fewer tokens, then more similar).
+    rows: dicts with model, similarity (0-100 or None; the mean over ALL runs of the model, a failed run or
+    a missing case counting as 0), status (stability: stable, single run, unstable, insufficient or None),
+    verdict (None, equivalent, minor gaps, disputed, major gaps), tokens, time, cost. Rule:
+      1. drop models without similarity or cost, or with a "major gaps" verdict from both judges
+         (disputed verdicts stay, flagged). Stability is not a filter: a failed run already costs the
+         model its share of the similarity, and instability is reported next to the recommendation;
+      2. value = similarity points per dollar = similarity / cost;
+      3. recommend the model with the highest value (ties: more similar, then faster, then fewer tokens).
     """
     inf = float("inf")
     excluded, pool = [], []
     for r in rows:
-        status = r.get("status")
         if r["similarity"] is None:
             excluded.append((r["model"], "no similarity measured"))
-        elif status == "insufficient":
-            excluded.append((r["model"], "too few complete runs"))
-        elif status == "unstable":
-            excluded.append((r["model"], "unstable results between repeated runs"))
-        elif r["cost"] is None:
+        elif not r["cost"]:
             excluded.append((r["model"], "cost unavailable"))
         elif r["verdict"] == "major gaps":
             excluded.append((r["model"], "verdict: major gaps"))
         else:
             pool.append(r)
-    res = {"excluded": excluded, "candidates": [], "recommended": None, "best": None, "tolerance": tolerance}
+    res = {"excluded": excluded, "pool": pool, "recommended": None, "best": None}
     scored = [r for r in rows if r["similarity"] is not None]
     res["highest_quality"] = (max(scored, key=lambda r: (r["similarity"], -VERDICTS.get(r["verdict"], 1)))
                               if scored else None)
@@ -420,13 +412,10 @@ def recommend(rows, tolerance):
     timed = [r for r in rows if r["time"] is not None]
     res["fastest"] = min(timed, key=lambda r: r["time"]) if timed else None
     if pool:
-        tol = max([tolerance] + [r["spread"] for r in pool if r.get("spread") is not None])
-        res["tolerance"] = tol
         res["best"] = max(pool, key=lambda r: r["similarity"])
-        res["candidates"] = [r for r in pool if r["similarity"] >= res["best"]["similarity"] - tol]
-        res["recommended"] = min(res["candidates"], key=lambda r: (
-            r["cost"], r["time"] if r["time"] is not None else inf,
-            r["tokens"] if r["tokens"] is not None else inf, -r["similarity"]))
+        res["recommended"] = max(pool, key=lambda r: (
+            points_per_dollar(r), r["similarity"], -(r["time"] if r["time"] is not None else inf),
+            -(r["tokens"] if r["tokens"] is not None else inf)))
     return res
 
 
@@ -440,14 +429,16 @@ def recommendation_rows(runs, sim, verdicts):
     for m, r in runs.items():
         v = verdicts.get(m)
         s = ((sim or {}).get("summary") or {}).get(m) or {}
-        rows.append({"model": m, "similarity": s.get("score"), "status": s.get("status") or None,
+        all_runs = parse_pct(s.get("all_runs", ""))
+        rows.append({"model": m, "similarity": s.get("score") if all_runs is None else all_runs,
+                     "status": s.get("status") or None,
                      "spread": s.get("run_spread"), "valid_runs": s.get("valid_runs", ""), "runs": s.get("runs", ""),
                      "verdict": v[0] if v else None, "verdict_reason": v[1] if v else "",
                      "tokens": r["tokens"], "time": r["time"], "cost": r["cost"]})
     return rows
 
 
-def render_recommendation(rows, tolerance, sim, base, number=8, stopped=False):
+def render_recommendation(rows, sim, base, number=8, stopped=False):
     """Lines of the model recommendation section, numbered `number` (8 in the detailed report, 4 in the short one)."""
     out = [f"## {number}. Model recommendation", ""]
     if stopped:
@@ -456,29 +447,36 @@ def render_recommendation(rows, tolerance, sim, base, number=8, stopped=False):
         out += ["_No similarity data. Run the model runs (`scripts/run_skill.py`) and "
                 "`python skill-eval/scripts/compute_similarity.py <skill_dir>`, then build the report again._", ""]
         return out
-    res = recommend(rows, tolerance)
-    rec, tol = res["recommended"], res["tolerance"]
+    res = recommend(rows)
+    rec = res["recommended"]
+    statuses = [r["status"] for r in rows if r["status"]]
+    if statuses and not any(s in ("stable", "single run") for s in statuses):
+        out += ["**Problem in the skill, not in a model:** no model gives stable results between repeated runs. "
+                "When every model is unstable or fails runs, the cause is usually the skill (unclear steps, "
+                "a result that depends on luck). Read the transcripts (`.jsonl` files) before relying on the "
+                "recommendation below: it is only the best value among unreliable results.", ""]
     if rec is None:
         out += ["**No model can be recommended:** every model is excluded or has missing data (see below).", ""]
     else:
-        best = res["best"]
-        names = ", ".join(f"`{r['model']}`" for r in res["candidates"])
+        others = sorted((r for r in res["pool"] if r is not rec), key=points_per_dollar, reverse=True)
         better_out = [(m, why) for m, why in res["excluded"]
                       if next(r for r in rows if r["model"] == m)["similarity"] is not None
                       and next(r for r in rows if r["model"] == m)["similarity"] > rec["similarity"]]
-        if len(res["candidates"]) == 1 and rec is best:
-            why = (f"it is the most similar model that qualifies, and no other qualifying model is within "
-                   f"{tol:.1f} points of it.")
-        else:
-            why = (f"it is within {tol:.1f} points of the most similar qualifying model (`{best['model']}`, "
-                   f"{fmt_pct(best['similarity'])}) and is the cheapest of the candidates ({names}).")
+        why = (f"it gives the most similarity per dollar: {points_per_dollar(rec):.1f} points per $ "
+               f"({fmt_pct(rec['similarity'])} for {fmt_cost(rec['cost'])})")
+        if others:
+            why += ", ahead of " + ", ".join(f"`{r['model']}` ({points_per_dollar(r):.1f})" for r in others)
         out += [f"**Recommended model: `{rec['model']}`.** {fmt_pct(rec['similarity'])} similar to the verified "
                 f"outputs; per full run {fmt_tokens(rec['tokens'])} tokens, {fmt_time(rec['time'])}, "
-                f"{fmt_cost(rec['cost'])}. Chosen because {why}", ""]
+                f"{fmt_cost(rec['cost'])}. Chosen because {why}.", ""]
         if better_out:
             out += ["Models with higher similarity that were not considered: " + "; ".join(
                 f"`{m}` ({fmt_pct(next(r for r in rows if r['model'] == m)['similarity'])}, {why})"
                 for m, why in better_out) + ".", ""]
+        if rec["status"] in ("unstable", "insufficient"):
+            spread = f" (run spread {rec['spread']:.1f} points)" if rec.get("spread") is not None else ""
+            out += [f"**Note:** `{rec['model']}` is `{rec['status']}`{spread}. Its score already counts failed runs "
+                    "as 0, but a single run can still land far from the mean.", ""]
         if rec["verdict"] == "disputed":
             out += [f"**Check by hand:** the judges disagree about `{rec['model']}`. {rec['verdict_reason']}", ""]
     if not any(r["verdict"] for r in rows):
@@ -489,14 +487,15 @@ def render_recommendation(rows, tolerance, sim, base, number=8, stopped=False):
             f"| Similarity points per $ |",
             "| --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: |"]
     for r in rows:
-        per_dollar = (f"{r['similarity'] / r['cost']:.1f}"
-                      if r["similarity"] is not None and r["cost"] else "unavailable")
+        ppd = points_per_dollar(r)
+        per_dollar = f"{ppd:.1f}" if ppd is not None else "unavailable"
         verdict = VERDICT_LABELS.get(r["verdict"], "not given")
         mark = " (recommended)" if rec is not None and r["model"] == rec["model"] else ""
         done = f"{r['valid_runs']}/{r['runs']}" if r["runs"] else "n/a"
         out.append(f"| {r['model']}{mark} | {fmt_pct(r['similarity'])} | {verdict} | {r['status'] or 'n/a'} | {done} "
                    f"| {fmt_tokens(r['tokens'])} | {fmt_time(r['time'])} | {fmt_cost(r['cost'])} | {per_dollar} |")
-    out += ["", "Similarity is the mean over the complete runs. Tokens, time and cost are means per full run "
+    out += ["", "Similarity is the mean over all runs of the model: a failed run or a missing case counts as 0. "
+            "Similarity points per $ = Similarity / Cost. Tokens, time and cost are means per full run "
             "(all inputs).", ""]
 
     out += [f"### {number}.1 At a glance", ""]
@@ -514,9 +513,9 @@ def render_recommendation(rows, tolerance, sim, base, number=8, stopped=False):
                    f"than `{rec['model']}`, which needs" + (f" {extra} of `{best['model']}`." if extra else " less."))
     elif rec and best:
         out.append(f"- Trade-off: none among the qualifying models. `{rec['model']}` is both the most similar and "
-                   "the cheapest candidate.")
+                   "the best value.")
     ch = res["cheapest"]
-    if rec and ch and ch["model"] != rec["model"] and ch["similarity"] is not None and rec["cost"]:
+    if rec and ch and ch["model"] != rec["model"] and ch in res["pool"] and rec["cost"]:
         out.append(f"- Cheaper option: `{ch['model']}` ({ch['cost'] / rec['cost'] * 100:.0f}% of the cost of "
                    f"`{rec['model']}`) is {rec['similarity'] - ch['similarity']:.1f} points less similar.")
     out.append("")
@@ -527,13 +526,13 @@ def render_recommendation(rows, tolerance, sim, base, number=8, stopped=False):
         out += ["Verdicts from the comparison step:", ""] + reasons + [""]
 
     out += [f"### {number}.2 How the choice is made", "",
-            "1. Drop models without similarity or cost, with too few complete runs, with unstable results between "
-            "repeated runs, or with a `Major gaps` verdict from both judges. A `Disputed` verdict (judges disagree) keeps "
-            "the model in and asks for a manual check.",
-            f"2. Tolerance: the largest spread between the repeated runs of the remaining models, at least "
-            f"{read_tolerance():g} points (`recommendation.tolerance_points` in `config.yaml`). "
-            f"Here: {tol:.1f} points. Models closer to the best than this are equal within the noise.",
-            "3. Recommend the cheapest candidate. Ties: faster, then fewer tokens.", ""]
+            "1. Drop models without similarity or cost, or with a `Major gaps` verdict from both judges. A `Disputed` "
+            "verdict (judges disagree) keeps the model in and asks for a manual check.",
+            "2. Similarity of a model is the mean over all its runs, a failed run counting as 0. Value = similarity / "
+            "cost, in similarity points per $.",
+            "3. Recommend the model with the highest value. Ties: more similar, then faster, then fewer tokens.",
+            "4. Stability is not a filter, but it is reported. If no model is stable, the report names the skill as "
+            "the likely problem.", ""]
     if base and base.get("similarity"):
         out += [f"### {number}.3 Similarity: V1 and V2", "",
                 "| Model | Similarity V1 | Similarity V2 | Change (points) |", "| --- | ---: | ---: | ---: |"]
@@ -601,7 +600,7 @@ def collect(skill_dir, baseline_dir=None):
     return {
         "meta": meta, "structure": structure, "rubric": read(steps / "02_rubric.md") or "_Not run._",
         "runs": runs, "cmp_rows": read_comparison_rows(skill_dir), "sim": sim,
-        "rec_rows": recommendation_rows(runs, sim, read_verdicts(skill_dir)), "tolerance": read_tolerance(),
+        "rec_rows": recommendation_rows(runs, sim, read_verdicts(skill_dir)),
         "base": read_baseline(baseline_dir) if baseline_dir else None, "blockers": blockers,
         "stopped": bool(blockers) and not runs and sim is None,
         "generated": (Path(skill_dir) / "evals" / "GENERATED.md").is_file(),
@@ -636,7 +635,7 @@ def build_detailed(ctx):
         out += [f"Evaluation of `{meta['name']}` version {v2} on {len(runs)} model(s): "
                 f"{', '.join(runs) or 'none'}.", ""]
     if sim is not None:
-        rec = recommend(ctx["rec_rows"], ctx["tolerance"])["recommended"]
+        rec = recommend(ctx["rec_rows"])["recommended"]
         out += [f"Recommended model: **{rec['model']}** (see section 8)." if rec
                 else "No model could be recommended (see section 8).", ""]
     if ctx["generated"]:
@@ -694,7 +693,7 @@ def build_detailed(ctx):
         out += [demote(rubric), ""]
 
     # 8. Model recommendation, 9. Stability
-    out += render_recommendation(ctx["rec_rows"], ctx["tolerance"], sim, base, 8, ctx["stopped"])
+    out += render_recommendation(ctx["rec_rows"], sim, base, 8, ctx["stopped"])
     out += render_stability(sim, runs)
     return "\n".join(out).rstrip() + "\n"
 
@@ -711,7 +710,7 @@ def build_short(ctx):
         out += [f"Evaluation of `{meta['name']}` version {meta['version']} on {len(runs)} model(s): "
                 f"{', '.join(runs) or 'none'}.", ""]
         if sim is not None:
-            rec = recommend(ctx["rec_rows"], ctx["tolerance"])["recommended"]
+            rec = recommend(ctx["rec_rows"])["recommended"]
             out += [f"Recommended model: **{rec['model']}** (section 4)." if rec
                     else "No model could be recommended (section 4).", ""]
         if ctx["blockers"]:
@@ -720,7 +719,7 @@ def build_short(ctx):
         out += [f"Note: {GENERATED_NOTE}", ""]
     out += ["## 2. Skill name", "", f"Name: `{meta['name']}`  ", f"Version: `{meta['version']}`", "",
             "## 3. Skill description", "", meta["description"] or "_No description found._", ""]
-    out += render_recommendation(ctx["rec_rows"], ctx["tolerance"], sim, ctx["base"], 4, ctx["stopped"])
+    out += render_recommendation(ctx["rec_rows"], sim, ctx["base"], 4, ctx["stopped"])
     if ctx["blockers"]:
         out += ["## 5. Blocking structure findings", "", "Only the blocking (Blocker) findings of the structure check. "
                 "The full check is in the detailed report.", "", "| What's wrong | Suggested fix |", "| --- | --- |"]

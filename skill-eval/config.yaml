@@ -4,7 +4,6 @@
 # Sections:
 #   default_models, runs_per_model, runner   which models run the skill, how often, and with which limits (run_skill.py)
 #   stability                                when a model counts as unstable (compute_similarity.py)
-#   recommendation                           tolerance of the model recommendation (build_final_report.py)
 #   rubric_review                            model and token limit of the rubric review (step 2, read by Claude)
 #   default_profile, profiles                profiles: everything that depends on the kind of skill (references/profiles.md)
 #   static_checks                            severity of each structure check (structural_check.py)
@@ -39,13 +38,9 @@ stability:
   min_valid_runs: 2            # complete runs needed to rate a model (capped at runs_per_model)
   low_case_points: 60          # an input below this in every complete run of every model is flagged: check the verified output or the metric
 
-# Models whose similarity to the verified outputs is within the tolerance of
-# the best model's are treated as equally good, and the cheapest of them is
-# recommended. The tolerance is the largest spread between the repeated runs
-# of the models still in the race (the run-to-run noise), and never below
-# tolerance_points. With a single run per model, tolerance_points is used as is.
-recommendation:
-  tolerance_points: 3
+# The model recommendation has no settings: it is the highest similarity per
+# dollar (similarity / cost), a failed run counting as similarity 0. The rule is
+# recommend() in scripts/build_final_report.py.
 
 # ---------- rubric review (step 2) ----------
 

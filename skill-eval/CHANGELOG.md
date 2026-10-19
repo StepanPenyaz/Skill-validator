@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0]
+
+- The model recommendation is now the highest similarity per dollar (`similarity / cost`), the metric shown in the "Similarity points per $" column. It replaces "within a tolerance of the best similarity, then the cheapest".
+- Similarity in the recommendation is the mean over all runs of the model, a failed run or missing case counting as 0 (the "All runs, missing = 0" column of `05_similarity.md`), not the mean over complete runs only.
+- Stability no longer excludes a model from the recommendation; it is reported next to it. A model is dropped only when it has no similarity or cost, or when both judges say `Major gaps`. When no model is stable, the report says the problem is probably in the skill.
+- `recommendation.tolerance_points` is removed from `config.yaml`.
+
 ## [1.3.0]
 
 - New profile `codebase-plan` for skills that investigate a codebase and write an implementation plan, often through subagents. Needs a sandbox in the skill's `evals/sandbox/` (`codebase/` and `agents/*.md`). Similarity = 0.55 file recall + 0.20 grounding + 0.25 structure (phases present, same layers touched). See `references/profiles.md`, section 3a.
