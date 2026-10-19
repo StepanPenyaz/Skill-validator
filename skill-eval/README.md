@@ -49,7 +49,9 @@ A case with no output (a failed or cut-off run) scores 0 and makes its run incom
 
 Stability is measured on repeats of the same input, not between different inputs: a model is `unstable` when one input gets very different similarity from run to run. A model with too few complete runs is `insufficient`, which points at infrastructure (timeouts, budget), not at the model. If two or more models are unstable, the report flags a possible problem in the skill; one unstable model is a limit of that model.
 
-The recommendation (section 4 of the short report) follows a fixed rule: drop models with too few complete runs, unstable results, or a `Major gaps` verdict from both judges (a verdict the judges disagree on is `Disputed`, kept and flagged); take the models within the run-to-run noise of the best similarity (never less than `recommendation.tolerance_points`); recommend the cheapest of them.
+The recommendation (section 4 of the short report) follows a fixed rule, and its main metric is **similarity points per dollar**: `similarity / cost`. Similarity here is the mean over all runs of the model, and a failed run or missing case counts as 0, so failures lower the score. Example: haiku runs of 65%, 0% (failed) and 71% give 45.3%; at $0.50 that is 90.7 points per $. Sonnet runs of 74%, 66% and 78% give 72.7%; at $2.00 that is 36.3 points per $. Haiku is recommended.
+
+Only two things drop a model: no similarity or cost, or a `Major gaps` verdict from both judges (a verdict the judges disagree on is `Disputed`, kept and flagged). Stability does not exclude a model; it is shown next to the recommendation. If no model is stable, the report says the problem is probably in the skill. The rule is `recommend()` in `scripts/build_final_report.py`; it has no settings in `config.yaml`.
 
 Settings: all of them are in `config.yaml`.
 
@@ -87,7 +89,7 @@ Ask for a comparison of V1 and V2.
 | `SKILL.md` | Instructions for Claude |
 | `references/preferred-structure.md` | Structure `SKILL.md` is checked against |
 | `references/rubric.md` | Rubric for step 2 |
-| `config.yaml` | All settings: models, repeats, runner and stability limits, recommendation tolerance, rubric review model, similarity profiles, severity of static checks |
+| `config.yaml` | All settings: models, repeats, runner and stability limits, rubric review model, similarity profiles, severity of static checks |
 | `references/profiles.md` | Profiles: what depends on the kind of skill, and how to add one |
 | `scripts/profiles/` | Profile modules (`document`) |
 | `references/eval-data-authoring.md` | How to write or generate `evals/` data |

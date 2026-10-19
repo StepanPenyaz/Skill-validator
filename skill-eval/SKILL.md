@@ -2,7 +2,7 @@
 name: skill-eval
 description: Evaluates a Claude Agent Skill end to end and writes a short final report and a detailed one. It checks the skill's structure, reviews it against a rubric, runs it several times on several Claude models using evaluation inputs (it creates them when they are missing), measures tokens, time and cost, and compares the produced outputs with verified outputs (with a similarity score), and recommends which model to use. Use this whenever the user asks to evaluate, benchmark, audit, review, or measure a skill ("evaluate this skill", "how much does this skill cost to run", "how does this skill do on Opus vs Sonnet", "is this SKILL.md any good"). Also use it to compare two versions of the same skill (V1 vs V2). For a quick structure check only, tell the user to run /skill-static-review instead.
 metadata:
-  version: "1.3.0"
+  version: "1.4.0"
   maintained_by: "Claude Code Skill Evaluation project"
 ---
 
@@ -14,7 +14,7 @@ metadata:
 2. Do its sections mean what they should, and is it safe? (rubric review)
 3. Does it do its job on real inputs, and what does that cost? (repeated runs on several models, one `claude -p` process per input)
 4. How close is each produced output to the verified output, and how stable is it between repeats? (comparison and similarity)
-5. Which model should run the skill? (recommendation from similarity, stability, tokens, time and cost)
+5. Which model should run the skill? (recommendation: the most similarity per dollar; stability, tokens and time are reported next to it)
 
 It writes two reports: a short `final_report.md` (summary, skill name and description, model recommendation) and a `detailed_final_report.md` with everything.
 
@@ -147,7 +147,7 @@ It writes two files.
 
 `detailed_final_report.md` has numbered sections: 1 Summary (with three charts when two versions are compared), 2 Skill name, 3 Skill description, 4 Run results, 5 Output comparison (notes and similarity per case), 6 Skill structure check, 7 Skill rubric review, 8 Model recommendation (same as section 4 of the short report), 9 Run stability and behaviour.
 
-The recommendation is computed by a fixed rule, not by a model: drop models with too few complete runs, unstable results between repeats, or a `Major gaps` verdict from both judges; take the models within the run-to-run noise (at least `recommendation.tolerance_points`) of the best similarity; recommend the cheapest of them. If `step_reports/05_similarity.md` is missing, the section says so.
+The recommendation is computed by a fixed rule, not by a model: the main metric is similarity points per dollar, `similarity / cost`, where similarity is the mean over all runs of the model and a failed run or missing case counts as 0. Drop only models without similarity or cost, or with a `Major gaps` verdict from both judges; recommend the model with the highest value. Stability does not exclude a model, it is reported next to the recommendation. If no model is stable, the report says the problem is probably in the skill. If `step_reports/05_similarity.md` is missing, the section says so.
 
 When `--baseline` is used, the tables show V1, V2 and the change.
 
@@ -160,7 +160,7 @@ Tell the user where `final_report.md` is, which model is recommended and why, wh
 - Cost, tokens and time must be measured values. If one is missing, write `unavailable`.
 - Do not produce `.json` reports. All reports are Markdown. The `.json` files beside the produced outputs are raw run records, not reports.
 - Do not give the skill a numeric score. The similarity number scores a produced output against its verified output, never the skill. Notes must say what is right or wrong.
-- The model recommendation is only what the rule in step 6 produces. Do not override it by hand. If the user wants a different trade-off, change `recommendation.tolerance_points` for this run and say so.
+- The model recommendation is only what the rule in step 6 produces. Do not override it by hand. If the user wants a different trade-off, say that the rule is in `recommend()` of `scripts/build_final_report.py` and ask before changing it.
 - Generated eval data must be marked in `evals/GENERATED.md` so the reports can say it needs review.
 
 # Decision Guidelines
@@ -175,7 +175,7 @@ Tell the user where `final_report.md` is, which model is recommended and why, wh
 
 - `references/preferred-structure.md`: the structure `SKILL.md` is checked against.
 - `references/rubric.md`: the rubric for step 2.
-- `config.yaml`: all settings: models, repeats, runner limits, stability limits, recommendation tolerance, rubric review model and token limit, similarity profiles, severity of each static check.
+- `config.yaml`: all settings: models, repeats, runner limits, stability limits, rubric review model and token limit, similarity profiles, severity of each static check.
 - `references/profiles.md`: profiles, one per kind of skill (data, run, collection, evaluation), and how to add one.
 - `scripts/profiles/__init__.py`: the profile contract and the loader. `scripts/profiles/document.py`: the `document` profile. `scripts/profiles/codebase_plan.py`: the `codebase-plan` profile.
 - `references/eval-data-authoring.md`: how to write (or generate) `evals/inputs/` and `evals/verified-outputs/`.

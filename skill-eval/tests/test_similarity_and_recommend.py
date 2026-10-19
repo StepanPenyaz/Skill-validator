@@ -134,44 +134,73 @@ class StabilityTests(unittest.TestCase):
 
 def row(model, sim, verdict=None, cost=1.0, time=60, tokens=1000, status="stable", spread=None):
     return {"model": model, "similarity": sim, "verdict": verdict, "cost": cost, "time": time, "tokens": tokens,
-            "status": status, "spread": spread}
+            "status": status, "spread": spread, "runs": "3", "valid_runs": "3", "verdict_reason": ""}
 
 
 class RecommendTests(unittest.TestCase):
-    def test_cheapest_within_tolerance_wins(self):
-        res = bfr.recommend([row("opus", 90, cost=1.0), row("sonnet", 88, cost=0.4), row("haiku", 80, cost=0.1)], 3)
-        self.assertEqual(res["recommended"]["model"], "sonnet")
+    def test_highest_similarity_per_dollar_wins(self):
+        res = bfr.recommend([row("opus", 90, cost=1.0), row("sonnet", 88, cost=0.4), row("haiku", 80, cost=0.1)])
+        self.assertEqual(res["recommended"]["model"], "haiku")
+        self.assertEqual([r["model"] for r in res["pool"]], ["opus", "sonnet", "haiku"])
 
-    def test_tolerance_grows_with_run_spread_of_the_remaining_models(self):
-        rows = [row("opus", 90, cost=1.0, spread=8), row("haiku", 83, cost=0.1, spread=2)]
-        self.assertEqual(bfr.recommend(rows, 3)["recommended"]["model"], "haiku")
-        self.assertEqual(bfr.recommend(rows, 3)["tolerance"], 8)
-        rows[0]["spread"] = 1
-        self.assertEqual(bfr.recommend(rows, 3)["recommended"]["model"], "opus")
+    def test_cheaper_model_loses_when_it_is_much_less_similar(self):
+        res = bfr.recommend([row("opus", 90, cost=1.0), row("haiku", 20, cost=0.5)])
+        self.assertEqual(res["recommended"]["model"], "opus")
 
-    def test_major_gaps_excluded_even_if_best(self):
-        res = bfr.recommend([row("opus", 95, "major gaps"), row("sonnet", 85, "minor gaps")], 3)
+    def test_worked_example_failed_run_counts_as_zero(self):
+        haiku = (65 + 0 + 71) / 3
+        sonnet = (74 + 66 + 78) / 3
+        rows = [row("haiku", haiku, cost=0.5), row("sonnet", sonnet, cost=2.0)]
+        self.assertAlmostEqual(bfr.points_per_dollar(rows[0]), 90.7, places=1)
+        self.assertAlmostEqual(bfr.points_per_dollar(rows[1]), 36.3, places=1)
+        self.assertEqual(bfr.recommend(rows)["recommended"]["model"], "haiku")
+
+    def test_major_gaps_excluded_even_if_best_value(self):
+        res = bfr.recommend([row("haiku", 95, "major gaps", cost=0.1), row("sonnet", 85, "minor gaps", cost=1.0)])
         self.assertEqual(res["recommended"]["model"], "sonnet")
-        self.assertEqual(res["excluded"], [("opus", "verdict: major gaps")])
+        self.assertEqual(res["excluded"], [("haiku", "verdict: major gaps")])
 
     def test_disputed_verdict_keeps_the_model(self):
-        self.assertEqual(bfr.recommend([row("opus", 95, "disputed"), row("sonnet", 80)], 3)["recommended"]["model"], "opus")
+        res = bfr.recommend([row("opus", 95, "disputed", cost=0.5), row("sonnet", 80, cost=1.0)])
+        self.assertEqual(res["recommended"]["model"], "opus")
 
-    def test_unstable_and_insufficient_models_are_not_recommended(self):
-        res = bfr.recommend([row("a", 95, status="unstable"), row("b", 94, status="insufficient"), row("c", 70)], 3)
-        self.assertEqual(res["recommended"]["model"], "c")
-        self.assertEqual(len(res["excluded"]), 2)
+    def test_stability_is_not_a_filter(self):
+        res = bfr.recommend([row("a", 95, status="unstable", cost=0.1), row("b", 94, status="insufficient", cost=1.0),
+                             row("c", 70, cost=1.0)])
+        self.assertEqual(res["recommended"]["model"], "a")
+        self.assertEqual(res["excluded"], [])
 
-    def test_everything_unstable_gives_no_recommendation(self):
-        self.assertIsNone(bfr.recommend([row("a", 95, status="unstable"), row("b", 90, status="unstable")], 3)["recommended"])
+    def test_everything_unstable_still_recommends_and_names_the_skill(self):
+        rows = [row("a", 60, status="unstable", cost=0.3), row("b", 70, status="unstable", cost=2.0)]
+        self.assertEqual(bfr.recommend(rows)["recommended"]["model"], "a")
+        text = "\n".join(bfr.render_recommendation(rows, {"summary": {}, "cases": [["c1"]]}, None))
+        self.assertIn("Problem in the skill", text)
+        self.assertIn("Recommended model: `a`", text)
+
+    def test_stable_model_present_gives_no_skill_problem_note(self):
+        rows = [row("a", 60, status="unstable", cost=0.3), row("b", 70, status="stable", cost=2.0)]
+        text = "\n".join(bfr.render_recommendation(rows, {"summary": {}, "cases": [["c1"]]}, None))
+        self.assertNotIn("Problem in the skill", text)
 
     def test_missing_cost_or_similarity_excluded(self):
-        res = bfr.recommend([row("a", None), row("b", 90, cost=None), row("c", 70)], 3)
+        res = bfr.recommend([row("a", None), row("b", 90, cost=None), row("c", 70), row("d", 90, cost=0)])
         self.assertEqual(res["recommended"]["model"], "c")
+        self.assertEqual(len(res["excluded"]), 3)
 
-    def test_cost_tie_broken_by_time(self):
-        res = bfr.recommend([row("a", 90, cost=1, time=120), row("b", 89, cost=1, time=60)], 3)
+    def test_value_tie_broken_by_similarity_then_time(self):
+        res = bfr.recommend([row("a", 50, cost=0.5, time=60), row("b", 100, cost=1.0, time=120)])
         self.assertEqual(res["recommended"]["model"], "b")
+        res = bfr.recommend([row("a", 100, cost=1.0, time=120), row("b", 100, cost=1.0, time=60)])
+        self.assertEqual(res["recommended"]["model"], "b")
+
+    def test_rows_use_the_all_runs_similarity_with_failures_as_zero(self):
+        sim = {"summary": {"haiku": {"score": 68.0, "all_runs": "45.3%", "status": "unstable", "run_spread": 6.0,
+                                     "valid_runs": "2", "runs": "3"}}}
+        runs = {"haiku": {"tokens": 1000, "time": 60, "cost": 0.5}}
+        rows = bfr.recommendation_rows(runs, sim, {})
+        self.assertAlmostEqual(rows[0]["similarity"], 45.3)
+        sim["summary"]["haiku"]["all_runs"] = ""
+        self.assertAlmostEqual(bfr.recommendation_rows(runs, sim, {})[0]["similarity"], 68.0)
 
 
 class VerdictTests(unittest.TestCase):
