@@ -2,7 +2,7 @@
 name: skill-eval
 description: Evaluates a Claude Agent Skill end to end and writes a short final report and a detailed one. It checks the skill's structure, reviews it against a rubric, runs it several times on several Claude models using evaluation inputs (it creates them when they are missing), measures tokens, time and cost, and compares the produced outputs with verified outputs (with a similarity score), and recommends which model to use. Use this whenever the user asks to evaluate, benchmark, audit, review, or measure a skill ("evaluate this skill", "how much does this skill cost to run", "how does this skill do on Opus vs Sonnet", "is this SKILL.md any good"). Also use it to compare two versions of the same skill (V1 vs V2). For a quick structure check only, tell the user to run /skill-static-review instead.
 metadata:
-  version: "1.2.0"
+  version: "1.3.0"
   maintained_by: "Claude Code Skill Evaluation project"
 ---
 
@@ -74,7 +74,7 @@ A "clean subagent" for a whole version run means: start a subagent that gets onl
 
    It is the same report `/skill-static-review` writes. Exit code 2 means the report has Blocker findings.
 2. Copy the report into `step_reports/01_structure.md`.
-3. Choose the profile by what the skill produces (`references/profiles.md`). `document` is the default and fits skills that turn a text task into a structured Markdown result. If the skill works with something else (code, images, data files) and no implemented profile fits, stop and tell the user which profile is missing; do not use `document` for it. Give the same `--profile <name>` to steps 4 and 5, and say which profile was used when you report.
+3. Choose the profile by what the skill produces (`references/profiles.md`). `document` is the default and fits skills that turn a text task into a structured Markdown result. `codebase-plan` fits skills that investigate a codebase (often through subagents) and write a plan; it needs `evals/sandbox/` in the skill folder (step 3 says what to do when it is missing). If the skill works with something else (code, images, data files) and no implemented profile fits, stop and tell the user which profile is missing; do not use `document` for it. Give the same `--profile <name>` to steps 4 and 5, and say which profile was used when you report.
 4. **If the exit code is 2, stop.** Do not run steps 2 to 5. Go to step 6: the reports will say the evaluation stopped at the structure check and list only the blocking findings. Warnings and info-level findings never stop the run. Report them and keep going.
 
 ## Step 2: Rubric review
@@ -92,6 +92,7 @@ A "clean subagent" for a whole version run means: start a subagent that gets onl
 2. If a folder is missing or empty, start a generator subagent. Give it only the skill's name, description and `references/eval-data-authoring.md`. It writes `evals/inputs/` and `evals/verified-outputs/`. Do not wait for the user.
 3. Write `evals/GENERATED.md` listing the files the subagent created, and say that they need review. The reports then carry a note that the data was generated.
 4. If both folders exist but some file names have no partner, stop and tell the user which files have none.
+5. With the `codebase-plan` profile the generator also writes `evals/sandbox/codebase/` and `evals/sandbox/agents/` (see `references/eval-data-authoring.md`). If `run_skill.py` stops because the sandbox is missing, start the generator for it; never run the skill without a sandbox.
 
 ## Step 4: Run the target skill
 
@@ -176,7 +177,7 @@ Tell the user where `final_report.md` is, which model is recommended and why, wh
 - `references/rubric.md`: the rubric for step 2.
 - `config.yaml`: all settings: models, repeats, runner limits, stability limits, recommendation tolerance, rubric review model and token limit, similarity profiles, severity of each static check.
 - `references/profiles.md`: profiles, one per kind of skill (data, run, collection, evaluation), and how to add one.
-- `scripts/profiles/__init__.py`: the profile contract and the loader. `scripts/profiles/document.py`: the `document` profile.
+- `scripts/profiles/__init__.py`: the profile contract and the loader. `scripts/profiles/document.py`: the `document` profile. `scripts/profiles/codebase_plan.py`: the `codebase-plan` profile.
 - `references/eval-data-authoring.md`: how to write (or generate) `evals/inputs/` and `evals/verified-outputs/`.
 - `references/token-capture.md`: where tokens, time and cost come from.
 - `scripts/structural_check.py`, `scripts/generate_static_report.py`: the static review and the gate.

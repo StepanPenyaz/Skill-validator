@@ -163,6 +163,7 @@ def run_case(job, claude_cmd, skill_dir, out_dir, runner, force=False, profile=N
     with tempfile.TemporaryDirectory(prefix="skill-eval-") as work:
         install_skill(skill_dir, work, name)
         shutil.copy2(input_path, Path(work) / case)
+        profile.prepare(work, skill_dir, input_path)
         cmd = claude_cmd + ["-p", build_prompt(profile, case), "--model", model,
                             "--output-format", "stream-json", "--verbose", "--no-session-persistence",
                             "--permission-mode", "dontAsk", "--max-budget-usd", str(runner["max_budget_usd"]),
