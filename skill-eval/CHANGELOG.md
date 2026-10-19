@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0]
+
+- New profile `codebase-plan` for skills that investigate a codebase and write an implementation plan, often through subagents. Needs a sandbox in the skill's `evals/sandbox/` (`codebase/` and `agents/*.md`). Similarity = 0.55 file recall + 0.20 grounding + 0.25 structure (phases present, same layers touched). See `references/profiles.md`, section 3a.
+- Profile hook `prepare(workdir, skill_dir, case_path)`: fills the clean working directory before a run. `run_skill.py` calls it; the default does nothing, so `document` is unchanged.
+- The profile contract test no longer requires `check_applicable(".")` to succeed: a profile may refuse a skill, with a reason.
+- Example data for `skill-examples/feature-analyst/evals/` (sandbox, four inputs, four verified plans), generated and marked in `evals/GENERATED.md`.
+
 ## [1.2.0]
 
 - Model runs are `claude -p` processes started by `scripts/run_skill.py`, one per model, repeat and input, in a clean project that holds the skill but not `evals/`. Real tokens (input, output, cache), real cost, time, turns, tool calls and the full transcript are saved per case. Repeats: `runs_per_model` in `models_config.yaml`.

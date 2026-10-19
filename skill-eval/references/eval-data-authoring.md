@@ -30,6 +30,21 @@ Three to five cases are enough. Keep each case small, so a run stays cheap.
 
 When `evals/inputs/` or `evals/verified-outputs/` is missing or empty, `skill-eval` generates the files with a subagent in a fresh context and does not wait for the user. Give it only the skill's name and description, and this file. It must not read the skill's body or any earlier reports, so the cases are not shaped by the skill's own implementation. The orchestrator then writes `evals/GENERATED.md` with the list of files created.
 
+## Extra data for the `codebase-plan` profile
+
+A skill that analyses a codebase needs something to analyse. Add `evals/sandbox/`:
+
+```
+evals/sandbox/
+├── codebase/       a small realistic project (15 to 40 files), every layer the skill's description names
+└── agents/*.md     one definition (frontmatter name, description, tools, model) for every subagent SKILL.md names
+```
+
+- Keep the project small and consistent: files must exist where the verified plans say they do, and an existing file's content must make the planned change necessary.
+- Use at least one case per layer combination (all layers, one layer only, two layers) so that "do not touch a layer the feature does not need" is tested.
+- In verified plans name each existing file in backticks with its path relative to `codebase`, introduce each new file with "New file", and use `Phase N: <name>` headings. Backtick an endpoint or symbol only when the input fixes it.
+- Tools of the agents: read-only (`Read, Glob, Grep`). Agent definitions are part of the test setup; when the real ones differ, replace the generated ones.
+
 ## How an input is given to the model
 
 `scripts/run_skill.py` copies one input into a clean project next to the installed skill and sends the prompt `runner.prompt` of `config.yaml`, with `{input_file}` replaced by the input's file name. The result is read from the reply.

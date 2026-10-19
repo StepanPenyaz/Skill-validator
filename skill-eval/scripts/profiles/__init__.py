@@ -12,6 +12,7 @@ nothing about the kind of skill. A profile answers the five questions that do de
                              <one key per component>, "missing": [...], "n_facts": n, "no_output": bool}
                              (evaluation)
     check_applicable(skill_dir) (ok, note): can this profile judge this skill at all (applicability)
+    prepare(workdir, skill_dir, case_path) fills the clean working directory before a run (setup, optional)
 
 and describes itself for the report with `components` ([(key, column label)]) and `report_intro()`.
 
@@ -53,6 +54,10 @@ class Profile:
     def check_applicable(self, skill_dir):
         """(ok, note). A profile that cannot judge the skill returns (False, reason) and the run stops."""
         return True, ""
+
+    def prepare(self, workdir, skill_dir, case_path):
+        """Put what the case needs into the clean working directory before the model runs (a sample
+        project, agent definitions). Default: nothing. Never copy verified outputs here."""
 
     def collect(self, reply, workdir):
         """The produced output of one case. Default: the model's reply."""

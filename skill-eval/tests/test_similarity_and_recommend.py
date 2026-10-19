@@ -17,6 +17,7 @@ import build_final_report as bfr  # noqa: E402
 import compute_similarity as cs  # noqa: E402
 import run_skill as rs  # noqa: E402
 import profiles  # noqa: E402
+from profiles import codebase_plan as cp  # noqa: E402
 from profiles import document as doc  # noqa: E402
 
 PROFILE = {
@@ -352,6 +353,127 @@ class RunnerTests(unittest.TestCase):
             self.assertIsNotNone(produced["haiku"][3]["b.md"])
 
 
+PLAN = """# Plan
+## Summary
+Needs `POST /api/orders/{id}/cancel`.
+## Phase 1: Backend
+1. `backend/Shop.Api/Services/OrderService.cs` (existing): add cancel.
+2. `backend/Shop.Api/Controllers/OrdersController.cs` (existing): add the endpoint.
+## Phase 2: React
+1. `react-app/src/components/OrderDetails.tsx` (existing): add a button.
+"""
+PROFILE_SAMPLES = {"codebase-plan": PLAN}
+FEATURE_ANALYST = HERE.parent.parent / "skill-examples" / "feature-analyst"
+
+
+class CodebasePlanProfileTests(unittest.TestCase):
+    def setUp(self):
+        self.prof = profiles.get_profile("codebase-plan")
+        self.sandbox = self.prof.check_applicable(FEATURE_ANALYST) if FEATURE_ANALYST.is_dir() else (False, "no example")
+
+    def need_example(self):
+        if not self.sandbox[0]:
+            self.skipTest(f"example skill not available: {self.sandbox[1]}")
+
+    def test_refuses_a_skill_without_a_sandbox(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "SKILL.md").write_text("---\nname: x\n---\n", encoding="utf-8")
+            ok, note = profiles.get_profile("codebase-plan").check_applicable(d)
+        self.assertFalse(ok)
+        self.assertIn("evals/sandbox/codebase", note)
+
+    def test_refuses_an_agent_without_definition(self):
+        with tempfile.TemporaryDirectory() as d:
+            skill = Path(d)
+            (skill / "SKILL.md").write_text("---\nname: x\n---\nUses `x-investigator`.\n", encoding="utf-8")
+            (skill / "evals" / "sandbox" / "codebase").mkdir(parents=True)
+            (skill / "evals" / "sandbox" / "codebase" / "a.txt").write_text("a", encoding="utf-8")
+            ok, note = profiles.get_profile("codebase-plan").check_applicable(skill)
+        self.assertFalse(ok)
+        self.assertIn("x-investigator", note)
+
+    def test_scores(self):
+        prof = profiles.get_profile("codebase-plan")
+        self.assertAlmostEqual(prof.score(PLAN, PLAN)["similarity"], 100.0, places=3)
+        self.assertEqual(prof.score(PLAN, None)["similarity"], 0.0)
+        self.assertTrue(prof.score(PLAN, None)["no_output"])
+        # a path with and without the sandbox folder prefix is the same file
+        prefixed = PLAN.replace("`backend/", "`codebase/backend/")
+        self.assertAlmostEqual(prof.score(PLAN, prefixed)["similarity"], 100.0, places=3)
+
+    def test_missing_files_lower_recall(self):
+        prof = profiles.get_profile("codebase-plan")
+        partial = PLAN.replace("2. `backend/Shop.Api/Controllers/OrdersController.cs` (existing): add the endpoint.\n", "")
+        r = prof.score(PLAN, partial)
+        self.assertLess(r["file_recall"], 100)
+        self.assertIn("backend/shop.api/controllers/orderscontroller.cs", r["missing"])
+
+    def test_a_layer_that_should_stay_untouched_lowers_structure(self):
+        prof = profiles.get_profile("codebase-plan")
+        extra = PLAN + "## Phase 3: Angular\n1. `angular-app/src/app/models/order.model.ts` (existing): field.\n"
+        self.assertLess(prof.score(PLAN, extra)["structure"], 100)
+
+    def test_no_phases_lower_structure(self):
+        prof = profiles.get_profile("codebase-plan")
+        flat = PLAN.replace("Phase 1: ", "").replace("Phase 2: ", "")
+        self.assertLess(prof.score(PLAN, flat)["structure"], prof.score(PLAN, PLAN)["structure"])
+
+    def test_invented_paths_lower_grounding(self):
+        self.need_example()
+        prof = profiles.get_profile("codebase-plan")
+        prof.check_applicable(FEATURE_ANALYST)
+        real = prof.score(PLAN, PLAN)["grounding"]
+        invented = PLAN.replace("backend/Shop.Api/Services/OrderService.cs", "src/Domain/Handlers/CancelHandler.cs")
+        self.assertEqual(real, 100.0)
+        self.assertLess(prof.score(PLAN, invented)["grounding"], 100.0)
+        # a new file in a real project folder is fine
+        new_file = PLAN + "3. New `backend/Shop.Api/Exceptions/Anything.cs`.\n"
+        self.assertEqual(prof.score(PLAN, new_file)["grounding"], 100.0)
+
+    def test_no_file_named_is_not_grounded(self):
+        self.need_example()
+        prof = profiles.get_profile("codebase-plan")
+        prof.check_applicable(FEATURE_ANALYST)
+        self.assertEqual(prof.score(PLAN, "## Phase 1\nDo the work.\n")["grounding"], 0.0)
+
+    def test_every_verified_plan_scores_100_against_itself(self):
+        self.need_example()
+        prof = profiles.get_profile("codebase-plan")
+        for f in sorted((FEATURE_ANALYST / "evals" / "verified-outputs").glob("*.md")):
+            text = f.read_text(encoding="utf-8")
+            with self.subTest(case=f.name):
+                s = prof.score(text, text)
+                self.assertAlmostEqual(s["similarity"], 100.0, places=3)
+                self.assertGreater(s["n_facts"], 3)
+
+    def test_verified_plans_only_name_files_that_exist_or_are_marked_new(self):
+        self.need_example()
+        prof = profiles.get_profile("codebase-plan")
+        prof.check_applicable(FEATURE_ANALYST)
+        files, _dirs = prof.codebase
+        for f in sorted((FEATURE_ANALYST / "evals" / "verified-outputs").glob("*.md")):
+            text = f.read_text(encoding="utf-8")
+            for line in text.splitlines():
+                for path in cp.extract_paths(line, prof.cfg):
+                    if path not in files:
+                        self.assertRegex(line.lower(), r"new file", f"{f.name}: {path} does not exist and is not marked as a new file")
+
+    def test_prepare_copies_the_sandbox_and_never_the_verified_outputs(self):
+        self.need_example()
+        with tempfile.TemporaryDirectory() as work:
+            self.prof.prepare(work, FEATURE_ANALYST, FEATURE_ANALYST / "evals" / "inputs" / "x.md")
+            self.assertTrue((Path(work) / "codebase" / "backend" / "Shop.Api" / "Program.cs").is_file())
+            self.assertTrue((Path(work) / ".claude" / "agents" / "feature-planner.md").is_file())
+            self.assertFalse(list(Path(work).rglob("verified-outputs")))
+            self.assertFalse(list(Path(work).rglob("evals")))
+
+    def test_collect_prefers_plan_md(self):
+        with tempfile.TemporaryDirectory() as work:
+            self.assertEqual(self.prof.collect("reply", work), "reply")
+            (Path(work) / "plan.md").write_text("the plan", encoding="utf-8")
+            self.assertEqual(self.prof.collect("reply", work), "the plan")
+
+
 class ProfileContractTests(unittest.TestCase):
     """The self-test every implemented profile must pass (see references/profiles.md)."""
 
@@ -381,10 +503,13 @@ class ProfileContractTests(unittest.TestCase):
                 opts = prof.run_options()
                 self.assertIn("{input_file}", opts["prompt"])
                 self.assertTrue(opts["allowed_tools"])
-                self.assertEqual(prof.check_applicable("."), (True, ""))
+                ok, note = prof.check_applicable(".")
+                self.assertIsInstance(ok, bool)
+                if not ok:
+                    self.assertTrue(note)  # a profile that refuses a skill must say why
                 self.assertTrue(prof.components)
                 keys = [k for k, _ in prof.components]
-                verified = VERIFIED
+                verified = PROFILE_SAMPLES.get(name, VERIFIED)
                 same = prof.score(verified, verified)
                 self.assertAlmostEqual(same["similarity"], 100.0, places=3)
                 none = prof.score(verified, None)

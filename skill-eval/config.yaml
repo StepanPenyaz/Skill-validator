@@ -106,6 +106,26 @@ profiles:
       mb: mb
       gb: gb
 
+  codebase-plan:
+    status: implemented
+    description: Skills that investigate a sample codebase (often through subagents) and write an implementation plan.
+    verified_glob: "*.md"      # one verified plan per input
+    # Needs evals/sandbox/codebase/ (copied into the run as ./codebase) and evals/sandbox/agents/*.md
+    # (copied as .claude/agents/). Neither is visible together with evals/verified-outputs/.
+    prompt: "Use the available skill to analyze and plan the feature described in {input_file}. The project to analyze is in the folder codebase. Save the plan to plan.md and reply with the plan only."
+    allowed_tools: [Skill, Read, Glob, Grep, Agent, Write]   # no Bash: the model cannot run commands
+    weights:
+      file_recall: 0.55        # share of the verified plan's file paths and backticked identifiers found in the produced plan
+      grounding: 0.20          # share of the produced plan's file paths that are real (or new files in a real project folder)
+      structure: 0.25          # phase headings present, same layers touched, phase count close to the verified plan's
+    sandbox_prefix: "codebase/"   # stripped from paths, so `codebase/a/b.cs` and `a/b.cs` are the same file
+    min_existing_depth: 2         # a new file counts as grounded when its nearest existing folder is this deep
+    path_extensions: [cs, csproj, ts, tsx, js, jsx, html, scss, css, json, sql, yaml, yml, md]
+    layers:                       # folder of the sandbox codebase per layer; a plan should touch the same layers as the verified one
+      backend: "backend/"
+      react: "react-app/"
+      angular: "angular-app/"
+
   structured-data:
     status: planned
     description: JSON, YAML or CSV. Field-level exact match on keys and values.

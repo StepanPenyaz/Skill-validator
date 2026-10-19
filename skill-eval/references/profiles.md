@@ -19,6 +19,7 @@ A **profile** holds everything in `skill-eval` that depends on what the skill un
 | How is the model asked, with which tools? | `run_options()` | prompt and tools from `config.yaml` |
 | Where does the output of a case come from? | `collect(reply, workdir)` | the model's reply |
 | How close is the output to the verified one? | `score(verified, produced)` | facts, words, structure |
+| What must the clean working directory hold before the run? | `prepare(workdir, skill_dir, case_path)` | nothing |
 | Can the profile judge this skill at all? | `check_applicable(skill_dir)` | always |
 | How is the score explained in the report? | `components`, `report_intro()` | three components |
 
@@ -31,6 +32,7 @@ A profile has two parts: the module `scripts/profiles/<name>.py` (hyphens in the
 | Profile | For skills that produce | Similarity | Status |
 |---|---|---|---|
 | `document` | Structured text: tickets, specs, reports, summaries with fixed sections | 0.60 fact recall + 0.25 content overlap + 0.15 structure | implemented |
+| `codebase-plan` | An implementation plan written after investigating a sample codebase, usually through subagents | 0.55 file recall + 0.20 grounding + 0.25 structure | implemented |
 | `structured-data` | JSON, YAML, CSV | Share of keys and values that match exactly | planned |
 | `code` | Code and scripts | Share of checks that pass (a check command) | planned |
 | `classification` | Labels and decisions | Exact-match accuracy over the cases | planned |
@@ -43,6 +45,28 @@ A profile has two parts: the module `scripts/profiles/<name>.py` (hyphens in the
 
 Extra content (for example an "Open questions" block the verified output does not have) is not penalised by the number. It is for the comparison step to note, and the `Verdict:` line reflects it.
 
+## 3a. The `codebase-plan` profile
+
+For skills that look at a project and write a plan (feature analysis, impact analysis, migration planning), often by delegating to subagents. The skill is run against a **sandbox** that you supply in the skill's folder:
+
+```
+<skill>/evals/sandbox/
+├── codebase/        the project to analyse; copied into the run as ./codebase
+└── agents/*.md      definitions of the subagents the skill delegates to; copied as .claude/agents/
+```
+
+`check_applicable` refuses the skill when `codebase/` is missing or empty, or when `SKILL.md` names an agent (a backticked name ending in `-investigator`, `-planner`, `-agent`, `-reviewer` or `-explorer`) that has no file in `agents/`. The sandbox sits under `evals/`, so it is never part of the packaged skill, and the model never sees `evals/verified-outputs/`.
+
+The model gets `Skill, Read, Glob, Grep, Agent, Write` (no `Bash`), is asked to save the plan to `plan.md` and reply with it. The plan is read from `plan.md`, or from the reply when the file is missing. The score has three parts:
+
+- **File recall** is the share of the verified plan's file paths and backticked identifiers (endpoints, symbols) found in the produced plan: did it find the places that have to change? `codebase/a/b.cs` and `a/b.cs` are the same file.
+- **Grounding** is the share of the produced plan's file paths that exist in the sandbox codebase, appear in the verified plan, or are new files inside a real project folder (`min_existing_depth`). Invented folders lower it. A plan that names no file scores 0.
+- **Structure** is the mean of three shares: `Phase` headings present, the same layers touched as in the verified plan (`layers` in `config.yaml`: a layer the feature does not need must stay untouched), and a phase count close to the verified one.
+
+Write verified plans so that every existing file is named in backticks with its path relative to `codebase`, and every new file is introduced as "New file". Name an endpoint or symbol in backticks only when the input fixes it, because a different but valid name would count as missing. Extra files and extra prose are not penalised by the number; the judges' `Verdict:` line covers them.
+
+Limits: there are several valid plans for most features, so recall rewards finding the expected files, not choosing the same design. What the skill does in the SQL `todos` table or other tools that `claude -p` does not have is not measured. Whether the investigators really ran in parallel and the skill did not investigate itself shows in the transcripts (`.jsonl`) and the tool counts of the run report; it is not part of the score.
+
 ## 4. Choosing a profile
 
 The profile used is `default_profile` in `config.yaml` (`document`), or the one given with `--profile <name>` to `run_skill.py` and `compute_similarity.py`. Use the same profile for both. The report names the profile. If a profile is planned or cannot judge the skill (`check_applicable`), the run stops with a message instead of producing a number that means nothing.
@@ -52,6 +76,8 @@ Pick the profile by what the skill produces, not by how it is written: if the ve
 ## 5. Adding a profile
 
 Work through these in order. The profile is ready only after step 5.
+
+Use `prepare` when a case needs more than the input file in its working directory (a sample project, agent definitions), as `codebase-plan` does.
 
 1. **Input and output.** What does the skill receive, and what does it produce: text in the reply, or files?
 2. **Verified output.** What counts as the reference: a finished result, a set of tests, or criteria? Set `verified_glob`.
